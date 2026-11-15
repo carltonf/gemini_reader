@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini CLI Reader V3.3</title>
+    <title>Gemini CLI Reader V3.4</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -57,47 +57,71 @@
         
         .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .drop-target-active { border: 2px dashed #0284c7 !important; background: rgba(14, 165, 233, 0.08) !important; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-darkbg text-slate-800 transition-colors duration-200 h-screen overflow-hidden flex flex-col">
 
     <div id="app" class="flex-1 flex overflow-hidden relative">
         <!-- LANDING -->
-        <div id="landing-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-darkbg p-6 transition-all duration-300">
-            <div class="max-w-2xl w-full text-center space-y-8">
-                <div class="inline-block p-4 rounded-full bg-blue-50 dark:bg-slate-800 mb-4 shadow-inner">
+        <div id="landing-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-darkbg p-6 transition-all duration-300 overflow-y-auto">
+            <div class="max-w-2xl w-full text-center space-y-6 my-auto">
+                <div class="inline-block p-4 rounded-full bg-blue-50 dark:bg-slate-800 mb-2 shadow-inner">
                     <i class="ph ph-chat-circle-text text-6xl text-blue-500"></i>
                 </div>
-                <h1 class="text-4xl font-bold text-slate-900 dark:text-white">Gemini CLI Reader <span class="text-sm align-top text-blue-500 font-mono">v3.3</span></h1>
+                <h1 class="text-4xl font-bold text-slate-900 dark:text-white">Gemini CLI Reader <span class="text-sm align-top text-blue-500 font-mono">v3.4</span></h1>
                 <p class="text-lg text-slate-600 dark:text-slate-400">
                     The ultimate local Hub for your chats.<br>
                     <span class="text-sm opacity-75">Global search, Export, Stats, and Auto-refresh.</span>
                 </p>
-                <button onclick="selectFolder()" class="group relative inline-flex items-center justify-center px-10 py-4 font-semibold text-white transition-all duration-200 bg-blue-600 rounded-lg hover:bg-blue-700 shadow-lg hover:shadow-blue-500/40 transform hover:-translate-y-1">
-                    <i class="ph ph-folder-open text-xl mr-2"></i> Open .gemini folder
-                </button>
-                <div class="mt-8 text-xs text-slate-400">Supports Windows, MacOS & Linux &bull; 100% Local</div>
-                 <!-- OS Hints -->
-                <div class="mt-12 text-left bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm w-full">
-                     <h3 class="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center">
-                        <i class="ph ph-info mr-2"></i> Where is the chat folder?
+
+                <!-- Actions -->
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                    <button onclick="selectFolder()" class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 font-semibold text-white transition-all duration-200 bg-blue-600 rounded-lg hover:bg-blue-700 shadow-lg hover:shadow-blue-500/40 transform hover:-translate-y-0.5 cursor-pointer">
+                        <i class="ph ph-folder-open text-xl mr-2"></i> Open .gemini folder
+                    </button>
+                    <button onclick="document.getElementById('folder-input').click()" class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-3.5 font-medium text-slate-700 dark:text-slate-200 transition-all duration-200 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 cursor-pointer">
+                        <i class="ph ph-folder mr-2"></i> Choose Directory
+                    </button>
+                    <button onclick="document.getElementById('files-input').click()" class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-3.5 font-medium text-slate-700 dark:text-slate-200 transition-all duration-200 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 cursor-pointer">
+                        <i class="ph ph-file mr-2"></i> Select File(s)
+                    </button>
+                </div>
+
+                <!-- Hidden file inputs for cross-browser fallback -->
+                <input type="file" id="folder-input" webkitdirectory directory multiple class="hidden" onchange="handleFileInput(this)">
+                <input type="file" id="files-input" multiple accept=".jsonl,.json" class="hidden" onchange="handleFileInput(this)">
+
+                <div class="text-xs text-slate-400">
+                    Supports Windows, MacOS & Linux &bull; 100% Local in Browser &bull; Drag & drop supported
+                </div>
+
+                <!-- OS Hints -->
+                <div class="text-left bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm w-full">
+                     <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center">
+                        <i class="ph ph-info mr-2"></i> Default Chat Folder Location
                      </h3>
-                     <div class="grid md:grid-cols-3 gap-6 text-sm">
-                        <div class="space-y-2">
+                     <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="space-y-1">
                             <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-windows-logo text-blue-500"></i> Windows</div>
                             <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">C:\Users\NAME\.gemini</code>
                         </div>
-                        <div class="space-y-2">
+                        <div class="space-y-1">
                             <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-apple-logo"></i> MacOS</div>
                             <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">/Users/name/.gemini</code>
                         </div>
-                         <div class="space-y-2">
+                        <div class="space-y-1">
                             <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-linux-logo text-orange-500"></i> Linux</div>
                             <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">/home/name/.gemini</code>
                         </div>
                      </div>
+                     <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+                        <i class="ph ph-lightbulb text-amber-500 mr-1"></i>
+                        <strong>Tip:</strong> Dotfolders like <code>.gemini</code> are hidden by default in file pickers. Press <kbd class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono">Ctrl+H</kbd> (Linux) or <kbd class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono">Cmd+Shift+.</kbd> (Mac) to show hidden items, or simply drag and drop the folder directly onto this page!
+                     </div>
                 </div>
-                <p class="text-xs text-red-500 mt-4 hidden" id="error-msg"></p>
+                <p class="text-xs text-red-500 hidden" id="error-msg"></p>
             </div>
         </div>
 
@@ -110,19 +134,25 @@
                         <h2 class="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                             <i class="ph ph-chats-circle text-blue-500"></i> Library
                         </h2>
-                        <div class="flex gap-1">
-                            <button onclick="toggleStats()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500"><i class="ph ph-chart-pie-slice"></i></button>
-                            <button onclick="toggleSidebar()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500"><i class="ph ph-caret-left"></i></button>
+                        <div class="flex gap-1 items-center">
+                            <button onclick="selectFolder()" title="Open another folder or files" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors"><i class="ph ph-folder-open"></i></button>
+                            <button onclick="toggleStats()" title="View statistics" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors"><i class="ph ph-chart-pie-slice"></i></button>
+                            <button onclick="toggleSidebar()" title="Collapse sidebar" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors"><i class="ph ph-caret-left"></i></button>
                         </div>
                     </div>
                     <div class="relative">
                         <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-slate-400"></i>
-                        <input type="text" id="search-input" placeholder="Search..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-9 pr-8 text-sm focus:outline-none focus:border-blue-500 dark:text-slate-200 placeholder-slate-400 transition-colors">
+                        <input type="text" id="search-input" placeholder="Search chats..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-9 pr-8 text-sm focus:outline-none focus:border-blue-500 dark:text-slate-200 placeholder-slate-400 transition-colors">
                         <button id="clear-search" onclick="clearSearch()" class="absolute right-2 top-2.5 text-slate-400 hover:text-red-500 hidden"><i class="ph ph-x-circle"></i></button>
                     </div>
                     <div class="flex gap-2 text-xs">
-                        <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium">All</button>
+                        <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium transition-colors">All</button>
                         <button onclick="setFilter('favorites')" id="filter-fav" class="flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"><i class="ph ph-star-fill text-yellow-500"></i> Favorites</button>
+                    </div>
+                    <!-- Active Project Filter Badge -->
+                    <div id="active-project-pill" class="hidden px-2.5 py-1 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded text-xs flex justify-between items-center">
+                        <span class="truncate font-mono flex items-center gap-1"><i class="ph ph-folder text-blue-500"></i> <span id="active-project-name"></span></span>
+                        <button onclick="clearProjectFilter()" title="Clear project filter" class="hover:text-red-500 p-0.5"><i class="ph ph-x"></i></button>
                     </div>
                 </div>
                 <div id="chat-list" class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1"></div>
@@ -165,8 +195,8 @@
                                 <button onclick="window.print()" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-printer mr-2"></i> Print / PDF</button>
                             </div>
                         </div>
-                        <button id="project-hash" onclick="filterByProject(this.innerText)" class="hidden lg:inline-block text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors" title="Filter by this project"></button>
-                         <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><i id="theme-icon" class="ph ph-moon"></i></button>
+                        <button id="project-hash" onclick="filterByProject(this.dataset.project || this.innerText)" class="hidden lg:inline-block text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors" title="Filter by this project"></button>
+                        <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><i id="theme-icon" class="ph ph-moon"></i></button>
                     </div>
                 </header>
                 <div id="messages-container" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth">
@@ -179,33 +209,51 @@
         </div>
 
         <!-- STATS MODAL -->
-        <div id="stats-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-            <div class="bg-white dark:bg-darkpanel w-full max-w-lg rounded-2xl shadow-2xl p-6 transform transition-all scale-100">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-bold text-slate-800 dark:text-white">Project Statistics</h3>
+        <div id="stats-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm p-4">
+            <div class="bg-white dark:bg-darkpanel w-full max-w-xl rounded-2xl shadow-2xl p-6 transform transition-all scale-100 max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center mb-6 shrink-0">
+                    <h3 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <i class="ph ph-chart-pie-slice text-blue-500"></i> Workspace Statistics
+                    </h3>
                     <button onclick="toggleStats()" class="text-slate-400 hover:text-red-500"><i class="ph ph-x text-xl"></i></button>
                 </div>
-                <div class="grid grid-cols-2 gap-4 mb-6">
-                    <div class="bg-blue-50 dark:bg-slate-800 p-4 rounded-xl text-center">
-                        <div class="text-3xl font-bold text-blue-600 dark:text-blue-400" id="stat-total-chats">0</div>
-                        <div class="text-xs text-slate-500 uppercase tracking-wide">Conversations</div>
+                <div class="grid grid-cols-3 gap-3 mb-6 shrink-0">
+                    <div class="bg-blue-50 dark:bg-slate-800 p-3 rounded-xl text-center">
+                        <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" id="stat-total-chats">0</div>
+                        <div class="text-[10px] text-slate-500 uppercase tracking-wide">Sessions</div>
                     </div>
-                    <div class="bg-purple-50 dark:bg-slate-800 p-4 rounded-xl text-center">
-                        <div class="text-3xl font-bold text-purple-600 dark:text-purple-400" id="stat-total-tokens">0</div>
-                        <div class="text-xs text-slate-500 uppercase tracking-wide">Total Tokens</div>
+                    <div class="bg-indigo-50 dark:bg-slate-800 p-3 rounded-xl text-center">
+                        <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400" id="stat-total-messages">0</div>
+                        <div class="text-[10px] text-slate-500 uppercase tracking-wide">Messages</div>
+                    </div>
+                    <div class="bg-purple-50 dark:bg-slate-800 p-3 rounded-xl text-center">
+                        <div class="text-2xl font-bold text-purple-600 dark:text-purple-400" id="stat-total-tokens">0</div>
+                        <div class="text-[10px] text-slate-500 uppercase tracking-wide">Tokens</div>
                     </div>
                 </div>
-                <h4 class="text-sm font-semibold mb-3 dark:text-slate-300">Models Used</h4>
-                <div id="stat-models-list" class="space-y-2 text-sm text-slate-600 dark:text-slate-400 max-h-40 overflow-y-auto"></div>
+                <div class="overflow-y-auto space-y-4 pr-1">
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Models Used</h4>
+                        <div id="stat-models-list" class="space-y-1.5 text-sm text-slate-600 dark:text-slate-300"></div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Projects</h4>
+                        <div id="stat-projects-list" class="space-y-1.5 text-sm text-slate-600 dark:text-slate-300"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // --- GLOBAL ERROR HANDLER ---
+        // --- SAFE ERROR HANDLER ---
         window.onerror = function(msg, url, line, col, error) {
-            alert("JS Error: " + msg);
-            console.error(msg, error);
+            console.error("Gemini CLI Reader Error:", msg, error);
+            const errEl = document.getElementById('error-msg');
+            if (errEl && msg && !msg.includes('AbortError')) {
+                errEl.textContent = typeof msg === 'string' ? msg : 'An unexpected error occurred.';
+                errEl.classList.remove('hidden');
+            }
             return false;
         };
 
@@ -214,43 +262,48 @@
         let currentChatId = null, currentZoom = 1.0, isSpeaking = false;
         let activeFilter = 'all', currentProjectFilter = null, searchTimeout = null;
         let currentUtterance = null;
-        const state = { dirHandle: null };
+        const state = { dirHandle: null, pollTimer: null };
 
-        // --- IMMEDIATE THEME INIT (Fixes Flash/Fail) ---
+        // --- IMMEDIATE THEME INIT ---
         function initTheme() {
-            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-                const icon = document.getElementById('theme-icon');
-                if(icon) icon.classList.replace('ph-moon', 'ph-sun');
-            }
+            try {
+                if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                    const icon = document.getElementById('theme-icon');
+                    if (icon) icon.classList.replace('ph-moon', 'ph-sun');
+                }
+            } catch (e) {}
         }
-        initTheme(); // Run immediately! 
+        initTheme();
 
         document.addEventListener('DOMContentLoaded', () => {
-            initTheme(); // Run again to sync icon
+            initTheme();
             loadFavorites();
 
-            // --- ROBUST MARKED CONFIG ---
-            // Setup renderer for Code Copy
+            // Setup marked renderer
             const renderer = new marked.Renderer();
-            const originalCode = renderer.code.bind(renderer);
-            
-            renderer.code = (code, language) => {
+            renderer.code = function(codeArg, langArg) {
+                let code = typeof codeArg === 'object' && codeArg !== null ? codeArg.text : codeArg;
+                let language = typeof codeArg === 'object' && codeArg !== null ? codeArg.lang : langArg;
+                code = code || '';
                 let highlighted = code;
-                if (language && hljs.getLanguage(language)) {
-                    highlighted = hljs.highlight(code, { language }).value;
-                } else {
-                    highlighted = hljs.highlightAuto(code).value;
+                try {
+                    if (language && hljs.getLanguage(language)) {
+                        highlighted = hljs.highlight(code, { language }).value;
+                    } else {
+                        highlighted = hljs.highlightAuto(code).value;
+                    }
+                } catch (e) {
+                    highlighted = escapeHtml(code);
                 }
-                
                 return `<div class="code-block-wrapper">
                             <div class="code-header">
-                                <span>${language || 'text'}</span>
+                                <span>${escapeHtml(language || 'text')}</span>
                                 <button class="hover:text-white transition-colors flex items-center gap-1" onclick="copyCode(this)">
                                     <i class="ph ph-copy"></i> Copy
                                 </button>
                             </div>
-                            <div class="code-content"><pre><code class="hljs ${language}">${highlighted}</code></pre></div>
+                            <div class="code-content"><pre><code class="hljs ${escapeHtml(language || '')}">${highlighted}</code></pre></div>
                             <div class="hidden raw-code">${escapeHtml(code)}</div> 
                         </div>`;
             };
@@ -261,20 +314,463 @@
                 const btn = document.getElementById('clear-search');
                 e.target.value ? btn.classList.remove('hidden') : btn.classList.add('hidden');
                 clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => filterChats(e.target.value), 300);
+                searchTimeout = setTimeout(() => filterChats(e.target.value), 250);
             });
-            
-            document.getElementById('tts-speed').addEventListener('input', (e) => {});
+
+            setupDragAndDrop();
         });
 
-        function loadFavorites() { try { const saved = localStorage.getItem('gemini_favs'); if (saved) favorites = new Set(JSON.parse(saved)); } catch(e) {} }
-        function saveFavorites() { localStorage.setItem('gemini_favs', JSON.stringify([...favorites])); }
+        // --- DRAG & DROP SUPPORT ---
+        function setupDragAndDrop() {
+            const landing = document.getElementById('landing-screen');
+            const app = document.getElementById('app');
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                window.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    landing.classList.add('drop-target-active');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                window.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    landing.classList.remove('drop-target-active');
+                }, false);
+            });
+
+            window.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                landing.classList.remove('drop-target-active');
+                const items = e.dataTransfer.items;
+                if (!items || items.length === 0) return;
+
+                const fileEntries = [];
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.webkitGetAsEntry) {
+                        const entry = item.webkitGetAsEntry();
+                        if (entry) fileEntries.push(entry);
+                    } else if (item.kind === 'file') {
+                        const f = item.getAsFile();
+                        if (f) fileEntries.push({ isFile: true, file: f, name: f.name });
+                    }
+                }
+
+                if (fileEntries.length > 0) {
+                    await processDroppedEntries(fileEntries);
+                }
+            });
+        }
+
+        async function processDroppedEntries(entries) {
+            showMainLayout();
+            const statusEl = document.getElementById('scan-status');
+            statusEl.textContent = "Scanning dropped files...";
+            
+            const rawFiles = [];
+            for (const entry of entries) {
+                if (entry.isFile && entry.file) {
+                    rawFiles.push({ file: entry.file, path: entry.name });
+                } else if (entry.isFile) {
+                    const f = await new Promise(res => entry.file(res));
+                    rawFiles.push({ file: f, path: entry.fullPath || entry.name });
+                } else if (entry.isDirectory) {
+                    await scanWebkitDirectory(entry, rawFiles);
+                }
+            }
+
+            await ingestFileList(rawFiles);
+        }
+
+        async function scanWebkitDirectory(dirEntry, outputList) {
+            const reader = dirEntry.createReader();
+            const readEntries = () => new Promise((resolve) => reader.readEntries(resolve, () => resolve([])));
+            
+            let batch;
+            do {
+                batch = await readEntries();
+                for (const child of batch) {
+                    if (child.name === '.git' || child.name === 'node_modules') continue;
+                    if (child.isFile) {
+                        const f = await new Promise(res => child.file(res));
+                        outputList.push({ file: f, path: child.fullPath || child.name });
+                    } else if (child.isDirectory) {
+                        await scanWebkitDirectory(child, outputList);
+                    }
+                }
+            } while (batch && batch.length > 0);
+        }
+
+        // --- DIRECTORY PICKER & FALLBACK ---
+        async function selectFolder() {
+            try {
+                if (!window.showDirectoryPicker) {
+                    // Fallback to standard directory input
+                    document.getElementById('folder-input').click();
+                    return;
+                }
+                const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+                state.dirHandle = dirHandle;
+                showMainLayout();
+                await scanDirectory(dirHandle);
+
+                if (state.pollTimer) clearInterval(state.pollTimer);
+                state.pollTimer = setInterval(() => scanDirectory(dirHandle, true), 10000);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error("Folder picker error, trying input fallback:", err);
+                    document.getElementById('folder-input').click();
+                }
+            }
+        }
+
+        async function handleFileInput(input) {
+            const files = Array.from(input.files || []);
+            if (files.length === 0) return;
+            showMainLayout();
+            const rawFiles = files.map(f => ({
+                file: f,
+                path: f.webkitRelativePath || f.name
+            }));
+            await ingestFileList(rawFiles);
+            input.value = ''; // Reset input
+        }
+
+        function showMainLayout() {
+            document.getElementById('landing-screen').classList.add('hidden');
+            const main = document.getElementById('main-layout');
+            main.classList.remove('hidden');
+            requestAnimationFrame(() => main.classList.remove('opacity-0'));
+        }
+
+        // --- PARSING & INGESTION ---
+        async function scanDirectory(dirHandle, isPolling = false) {
+            const statusEl = document.getElementById('scan-status');
+            if (!isPolling) statusEl.textContent = "Scanning...";
+
+            try {
+                const rawFiles = [];
+                for await (const item of getFilesRecursively(dirHandle)) {
+                    const name = item.fileHandle.name.toLowerCase();
+                    if (name.endsWith('.jsonl') || name.endsWith('.json')) {
+                        try {
+                            const file = await item.fileHandle.getFile();
+                            rawFiles.push({ file, path: item.path });
+                        } catch (e) {}
+                    }
+                }
+
+                await ingestFileList(rawFiles, isPolling);
+            } catch (err) {
+                statusEl.textContent = "Scan Error";
+                console.error("scanDirectory failed:", err);
+            }
+        }
+
+        async function* getFilesRecursively(entry, currentPath = '') {
+            if (entry.kind === 'file') {
+                yield { fileHandle: entry, path: currentPath ? `${currentPath}/${entry.name}` : entry.name };
+            } else if (entry.kind === 'directory') {
+                if (entry.name === '.git' || entry.name === 'node_modules') return;
+                for await (const handle of entry.values()) {
+                    const nextPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                    yield* getFilesRecursively(handle, nextPath);
+                }
+            }
+        }
+
+        async function ingestFileList(rawFiles, isPolling = false) {
+            const statusEl = document.getElementById('scan-status');
+            const tempChats = [];
+
+            for (const { file, path: filePath } of rawFiles) {
+                const name = file.name.toLowerCase();
+                // Filter only jsonl / session json files
+                if (!name.endsWith('.jsonl') && !name.endsWith('.json')) continue;
+                if (name === 'settings.json' || name === 'oauth_creds.json' || name === 'logs.json' || name === 'trustedfolders.json') continue;
+
+                try {
+                    const txt = await file.text();
+                    const chat = parseSessionFile(txt, file.name, filePath);
+                    if (chat && chat.messages && chat.messages.length > 0) {
+                        tempChats.push(chat);
+                    }
+                } catch (e) {
+                    console.debug("Failed to parse session file:", file.name, e);
+                }
+            }
+
+            tempChats.sort((a, b) => b.date - a.date);
+
+            const hasChanged = tempChats.length !== allChats.length || 
+                               (tempChats[0]?.id !== allChats[0]?.id) ||
+                               (tempChats[0]?.messages?.length !== allChats[0]?.messages?.length);
+
+            if (hasChanged || !isPolling) {
+                allChats = tempChats;
+                filterChats(document.getElementById('search-input').value);
+                statusEl.textContent = `Ready (${allChats.length} chats)`;
+
+                // If active chat received updates in background, refresh it
+                if (currentChatId) {
+                    const updatedActive = allChats.find(c => c.id === currentChatId);
+                    if (updatedActive) loadChat(currentChatId, false);
+                }
+            } else if (isPolling) {
+                statusEl.textContent = `Ready (${allChats.length} chats)`;
+            }
+        }
+
+        // --- SESSION PARSER (JSONL & JSON) ---
+        function parseSessionFile(content, fileName, relativePath = '') {
+            if (!content || !content.trim()) return null;
+
+            // 1. Try legacy single JSON object format
+            try {
+                const singleObj = JSON.parse(content);
+                if (singleObj && (singleObj.sessionId || singleObj.messages)) {
+                    const msgs = Array.isArray(singleObj.messages) ? singleObj.messages : [];
+                    const chatDate = new Date(singleObj.startTime || singleObj.lastUpdated || msgs[0]?.timestamp || Date.now());
+                    const project = singleObj.projectName || singleObj.projectHash || extractProjectFromPath(relativePath) || "default";
+                    return {
+                        id: singleObj.sessionId || fileName.replace(/\.jsonl?$/, ""),
+                        projectHash: singleObj.projectHash || "",
+                        projectName: project,
+                        date: isNaN(chatDate.getTime()) ? new Date() : chatDate,
+                        startTime: singleObj.startTime,
+                        lastUpdated: singleObj.lastUpdated,
+                        summary: singleObj.summary,
+                        messages: msgs,
+                        filename: fileName,
+                        searchText: buildSearchText(msgs, singleObj.summary, project)
+                    };
+                }
+            } catch (e) {}
+
+            // 2. Parse JSON Lines (event stream)
+            const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            if (lines.length === 0) return null;
+
+            let sessionId = null;
+            let projectHash = null;
+            let projectName = extractProjectFromPath(relativePath);
+            let startTime = null;
+            let lastUpdated = null;
+            let summary = null;
+            let kind = null;
+            const messagesMap = new Map();
+
+            for (const line of lines) {
+                let r;
+                try { r = JSON.parse(line); } catch (e) { continue; }
+                if (!r || typeof r !== 'object') continue;
+
+                if (r.sessionId) sessionId = r.sessionId;
+                if (r.projectHash) projectHash = r.projectHash;
+                if (r.startTime) startTime = r.startTime;
+                if (r.lastUpdated) lastUpdated = r.lastUpdated;
+                if (r.summary) summary = r.summary;
+                if (r.kind) kind = r.kind;
+
+                // $set update
+                if (r.$set) {
+                    if (r.$set.sessionId) sessionId = r.$set.sessionId;
+                    if (r.$set.lastUpdated) lastUpdated = r.$set.lastUpdated;
+                    if (r.$set.summary) summary = r.$set.summary;
+                    if (Array.isArray(r.$set.messages)) {
+                        messagesMap.clear();
+                        for (const m of r.$set.messages) {
+                            if (m && m.id) messagesMap.set(m.id, m);
+                        }
+                    }
+                }
+
+                // $patch update
+                if (r.$patch) {
+                    if (r.$patch.id && messagesMap.has(r.$patch.id)) {
+                        Object.assign(messagesMap.get(r.$patch.id), r.$patch);
+                    }
+                    if (Array.isArray(r.$patch.updates)) {
+                        for (const u of r.$patch.updates) {
+                            if (u && u.id && messagesMap.has(u.id)) {
+                                Object.assign(messagesMap.get(u.id), u);
+                            }
+                        }
+                    }
+                    if (Array.isArray(r.$patch.removeIds)) {
+                        for (const remId of r.$patch.removeIds) {
+                            messagesMap.delete(remId);
+                        }
+                    }
+                }
+
+                // $rewindTo update
+                if (r.$rewindTo) {
+                    const rewindId = r.$rewindTo;
+                    let found = false;
+                    const idsToDelete = [];
+                    for (const [id] of messagesMap) {
+                        if (id === rewindId) found = true;
+                        if (found) idsToDelete.push(id);
+                    }
+                    if (found) {
+                        for (const id of idsToDelete) messagesMap.delete(id);
+                    } else {
+                        messagesMap.clear();
+                    }
+                }
+
+                // Regular message record
+                if (r.id && !r.$patch && !r.$set && !r.$rewindTo) {
+                    messagesMap.set(r.id, r);
+                }
+            }
+
+            const messages = Array.from(messagesMap.values());
+            if (!sessionId && messages.length === 0) return null;
+
+            // If project name not found in path, try session context
+            if (!projectName) {
+                for (const m of messages) {
+                    const raw = extractMessageText(m.content);
+                    const projMatch = extractProjectFromText(raw);
+                    if (projMatch) {
+                        projectName = projMatch;
+                        break;
+                    }
+                }
+            }
+
+            const chatDate = new Date(startTime || lastUpdated || messages[0]?.timestamp || messages[messages.length - 1]?.timestamp || Date.now());
+
+            return {
+                id: sessionId || fileName.replace(/\.jsonl?$/, ""),
+                projectHash: projectHash || "",
+                projectName: projectName || (projectHash ? projectHash.substring(0, 6) : "workspace"),
+                date: isNaN(chatDate.getTime()) ? new Date() : chatDate,
+                startTime,
+                lastUpdated,
+                summary,
+                kind,
+                messages,
+                filename: fileName,
+                searchText: buildSearchText(messages, summary, projectName)
+            };
+        }
+
+        function extractProjectFromPath(relPath) {
+            if (!relPath) return "";
+            const parts = relPath.split(/[/\\]/);
+            const chatsIdx = parts.indexOf("chats");
+            if (chatsIdx > 0) {
+                return parts[chatsIdx - 1];
+            }
+            if (parts.length > 1) {
+                return parts[0];
+            }
+            return "";
+        }
+
+        function extractProjectFromText(text) {
+            if (!text) return "";
+            const m1 = text.match(/The project.*?temporary directory is:[^\r\n]*[\\\/]([a-zA-Z0-9_\-]+)/i);
+            if (m1) return m1[1];
+            const m2 = text.match(/Workspace Directories:[\s\S]*?-[^\r\n]*[\\\/]([a-zA-Z0-9_\-]+)/i);
+            if (m2) return m2[1];
+            return "";
+        }
+
+        function extractMessageText(content, options = { includeToolResponses: false }) {
+            if (!content) return "";
+            if (typeof content === "string") return content;
+            if (Array.isArray(content)) {
+                return content.map(part => {
+                    if (!part) return "";
+                    if (typeof part === "string") return part;
+                    if (part.text) return part.text;
+                    if (part.functionCall) {
+                        return `[Tool Call: ${part.functionCall.name}]`;
+                    }
+                    if (part.functionResponse) {
+                        if (options.includeToolResponses) {
+                            const resp = part.functionResponse.response?.output || part.functionResponse.response?.error || "";
+                            return `[Tool Response: ${part.functionResponse.name}]\n${typeof resp === 'string' ? resp : JSON.stringify(resp, null, 2)}`;
+                        }
+                        return "";
+                    }
+                    if (part.inlineData) {
+                        return `[Attachment: ${part.inlineData.mimeType || 'media'}]`;
+                    }
+                    return "";
+                }).filter(Boolean).join("\n");
+            }
+            if (typeof content === "object") {
+                if (content.text) return content.text;
+                return "";
+            }
+            return String(content);
+        }
+
+        function cleanSessionContext(text) {
+            if (!text) return "";
+            let cleaned = text.replace(/<session_context>[\s\S]*?<\/session_context>/gi, "");
+            cleaned = cleaned.replace(/<hook_context>[\s\S]*?<\/hook_context>/gi, "");
+            return cleaned.trim();
+        }
+
+        function extractSessionContext(text) {
+            if (!text) return null;
+            const match = text.match(/<session_context>([\s\S]*?)<\/session_context>/i);
+            return match ? match[1].trim() : null;
+        }
+
+        function isPureToolResponse(msg) {
+            if (!msg || msg.type !== 'user' || !Array.isArray(msg.content)) return false;
+            return msg.content.length > 0 && msg.content.every(p => p && p.functionResponse && !p.text);
+        }
+
+        function getChatTitle(chat) {
+            if (chat.summary && typeof chat.summary === 'string' && chat.summary.trim()) {
+                return chat.summary.trim();
+            }
+            for (const m of chat.messages) {
+                if (m.type === 'user') {
+                    const text = cleanSessionContext(extractMessageText(m.content));
+                    if (text) {
+                        return text.split('\n')[0].slice(0, 60);
+                    }
+                }
+            }
+            if (chat.projectName) {
+                return `${chat.projectName} (Session)`;
+            }
+            return "Session " + (chat.id ? chat.id.slice(0, 8) : "Chat");
+        }
+
+        function buildSearchText(messages, summary, project) {
+            const msgParts = messages.map(m => extractMessageText(m.content, { includeToolResponses: true }));
+            return (msgParts.join(' ') + ' ' + (summary || '') + ' ' + (project || '')).toLowerCase();
+        }
+
+        // --- FAVORITES & FILTERS ---
+        function loadFavorites() {
+            try {
+                const saved = localStorage.getItem('gemini_favs');
+                if (saved) favorites = new Set(JSON.parse(saved));
+            } catch (e) {}
+        }
+        function saveFavorites() {
+            localStorage.setItem('gemini_favs', JSON.stringify([...favorites]));
+        }
 
         function toggleTheme() {
             document.documentElement.classList.toggle('dark');
             localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
             const icon = document.getElementById('theme-icon');
-            icon.classList.contains('ph-moon') ? icon.classList.replace('ph-moon', 'ph-sun') : icon.classList.replace('ph-sun', 'ph-moon');
+            if (icon) {
+                icon.classList.contains('ph-moon') ? icon.classList.replace('ph-moon', 'ph-sun') : icon.classList.replace('ph-sun', 'ph-moon');
+            }
         }
 
         function adjustZoom(delta) {
@@ -292,86 +788,43 @@
 
         function toggleStats() {
             const modal = document.getElementById('stats-modal');
-            if (modal.classList.contains('hidden')) { calculateStats(); modal.classList.remove('hidden'); }
-            else { modal.classList.add('hidden'); }
-        }
-
-        async function selectFolder() {
-            try {
-                // Feature check
-                if (!window.showDirectoryPicker) { throw new Error("Your browser does not support File System Access API. Please use Chrome, Edge or Opera."); }
-                const dirHandle = await window.showDirectoryPicker({ mode: 'read' }); // Removed 'id' to be safe
-                state.dirHandle = dirHandle;
-                document.getElementById('landing-screen').classList.add('hidden');
-                const main = document.getElementById('main-layout');
-                main.classList.remove('hidden');
-                requestAnimationFrame(() => main.classList.remove('opacity-0'));
-                await scanDirectory(dirHandle);
-                setInterval(() => scanDirectory(dirHandle, true), 10000);
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    document.getElementById('error-msg').textContent = err.message;
-                    document.getElementById('error-msg').classList.remove('hidden');
-                    console.error(err);
-                }
-            }
-        }
-
-        async function scanDirectory(dirHandle, isPolling = false) {
-            const tempChats = [];
-            const statusEl = document.getElementById('scan-status');
-            if(!isPolling) statusEl.textContent = "Scanning...";
-
-            try {
-                for await (const entry of getFilesRecursively(dirHandle)) {
-                    if (entry.name.endsWith('.json')) {
-                        try {
-                            const file = await entry.getFile();
-                            const txt = await file.text();
-                            const data = JSON.parse(txt);
-                            if (data.messages) {
-                                tempChats.push({
-                                    id: data.sessionId,
-                                    date: new Date(data.startTime || data.messages[0]?.timestamp),
-                                    messages: data.messages,
-                                    projectHash: data.projectHash,
-                                    filename: entry.name,
-                                    searchText: (data.messages.map(m => m.content).join(' ') + ' ' + (data.projectHash||'')).toLowerCase()
-                                });
-                            }
-                        } catch (e) {}
-                    }
-                }
-                
-                tempChats.sort((a, b) => b.date - a.date);
-                
-                if (tempChats.length !== allChats.length || tempChats[0]?.id !== allChats[0]?.id) {
-                    allChats = tempChats;
-                    filterChats(document.getElementById('search-input').value);
-                    if(!isPolling) statusEl.textContent = `Ready (${allChats.length} chats)`;
-                }
-            } catch (err) { statusEl.textContent = "Auto-scan Error"; console.error(err); }
-        }
-
-        async function* getFilesRecursively(entry) {
-            if (entry.kind === 'file') yield entry;
-            else if (entry.kind === 'directory') {
-                for await (const handle of entry.values()) yield* getFilesRecursively(handle);
+            if (modal.classList.contains('hidden')) {
+                calculateStats();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
             }
         }
 
         function setFilter(type) {
-            activeFilter = type; currentProjectFilter = null;
-            document.getElementById('filter-all').className = type === 'all' ? "flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium transition-colors" : "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
-            document.getElementById('filter-fav').className = type === 'favorites' ? "flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium transition-colors" : "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
+            activeFilter = type;
+            currentProjectFilter = null;
+            document.getElementById('active-project-pill').classList.add('hidden');
+            document.getElementById('filter-all').className = type === 'all' ? 
+                "flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium transition-colors" : 
+                "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
+            document.getElementById('filter-fav').className = type === 'favorites' ? 
+                "flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium transition-colors" : 
+                "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
             filterChats(document.getElementById('search-input').value);
         }
 
-        function filterByProject(hash) {
-            activeFilter = 'project'; currentProjectFilter = hash;
-            document.getElementById('filter-all').classList.remove('bg-blue-100', 'text-blue-600');
-            document.getElementById('filter-fav').classList.remove('bg-blue-100', 'text-blue-600');
-            document.getElementById('search-input').value = ""; filterChats("");
+        function filterByProject(projectName) {
+            if (!projectName || projectName === 'N/A') return;
+            activeFilter = 'project';
+            currentProjectFilter = projectName;
+            document.getElementById('filter-all').className = "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
+            document.getElementById('filter-fav').className = "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
+            
+            const pill = document.getElementById('active-project-pill');
+            document.getElementById('active-project-name').textContent = projectName;
+            pill.classList.remove('hidden');
+
+            filterChats(document.getElementById('search-input').value);
+        }
+
+        function clearProjectFilter() {
+            setFilter('all');
         }
 
         function clearSearch() {
@@ -381,120 +834,284 @@
         }
 
         function filterChats(query) {
-            const q = query.toLowerCase();
+            const q = (query || '').toLowerCase().trim();
             filteredChats = allChats.filter(chat => {
                 const matchesSearch = !q || chat.searchText.includes(q);
                 let matchesFilter = true;
-                if (activeFilter === 'favorites') matchesFilter = favorites.has(chat.id);
-                if (activeFilter === 'project') matchesFilter = chat.projectHash === currentProjectFilter;
+                if (activeFilter === 'favorites') {
+                    matchesFilter = favorites.has(chat.id);
+                } else if (activeFilter === 'project') {
+                    matchesFilter = chat.projectName === currentProjectFilter || chat.projectHash === currentProjectFilter;
+                }
                 return matchesSearch && matchesFilter;
             });
             renderChatList();
         }
 
+        // --- RENDER CHAT LIST ---
         function renderChatList() {
             const listEl = document.getElementById('chat-list');
             listEl.innerHTML = '';
-            if (filteredChats.length === 0) { listEl.innerHTML = '<div class="text-center text-slate-400 text-xs mt-10">No chats found</div>'; return; }
+            if (filteredChats.length === 0) {
+                listEl.innerHTML = '<div class="text-center text-slate-400 text-xs mt-10">No chats found</div>';
+                return;
+            }
+
             filteredChats.forEach(chat => {
-                let title = "Chat";
-                const firstUser = chat.messages.find(m => m.type === 'user');
-                if (firstUser) title = firstUser.content.split('\n')[0].slice(0, 40);
+                const title = getChatTitle(chat);
                 const isFav = favorites.has(chat.id);
                 const isActive = chat.id === currentChatId;
+
                 const item = document.createElement('div');
-                item.className = `p-3 mx-2 rounded-lg cursor-pointer mb-1 border-l-4 transition-all relative group ${isActive ? 'bg-blue-50 dark:bg-slate-800 border-blue-500 shadow-sm' : 'hover:bg-slate-100 dark:hover:bg-slate-700 border-transparent'}`;
+                item.className = `p-3 mx-2 rounded-lg cursor-pointer mb-1 border-l-4 transition-all relative group ${isActive ? 'bg-blue-50 dark:bg-slate-800 border-blue-500 shadow-sm' : 'hover:bg-slate-100 dark:hover:bg-slate-700/60 border-transparent'}`;
                 item.onclick = () => loadChat(chat.id);
-                item.innerHTML = `<div class="flex justify-between items-start"><div class="font-semibold text-sm text-slate-700 dark:text-slate-200 truncate w-10/12">${escapeHtml(title)}</div>${isFav ? '<i class="ph ph-star-fill text-yellow-500 text-xs"></i>' : ''}</div><div class="text-[10px] text-slate-400 mt-1 flex justify-between"><span>${new Intl.DateTimeFormat('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}).format(chat.date)}</span><span class="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">${chat.projectHash ? chat.projectHash.substring(0,4) : ''}</span></div>`;
+
+                const dateStr = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(chat.date);
+                const projectLabel = escapeHtml(chat.projectName || (chat.projectHash ? chat.projectHash.substring(0, 6) : ''));
+                const messageCount = chat.messages.filter(m => m.type === 'user' || m.type === 'gemini').length;
+
+                item.innerHTML = `
+                    <div class="flex justify-between items-start gap-1">
+                        <div class="font-semibold text-sm text-slate-700 dark:text-slate-200 truncate flex-1">${escapeHtml(title)}</div>
+                        ${isFav ? '<i class="ph ph-star-fill text-yellow-500 text-xs shrink-0 mt-0.5"></i>' : ''}
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1 flex justify-between items-center">
+                        <span>${dateStr}</span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-mono bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">${projectLabel}</span>
+                            <span class="opacity-60">${messageCount} msgs</span>
+                        </div>
+                    </div>
+                `;
                 listEl.appendChild(item);
             });
         }
 
-        function loadChat(chatId) {
+        // --- RENDER ACTIVE CHAT ---
+        function loadChat(chatId, updateHistory = true) {
             currentChatId = chatId;
-            filterChats(document.getElementById('search-input').value);
+            if (updateHistory) renderChatList();
+
             const chat = allChats.find(c => c.id === chatId);
-            
-            const firstUser = chat.messages.find(m => m.type === 'user');
-            document.getElementById('current-chat-title').textContent = firstUser ? firstUser.content.split('\n')[0].slice(0, 60) : "Chat";
-            document.getElementById('current-chat-date').textContent = new Intl.DateTimeFormat('en-US', {dateStyle:'full', timeStyle:'short'}).format(chat.date);
-            document.getElementById('project-hash').textContent = chat.projectHash || "N/A";
-            
-            const favBtn = document.getElementById('fav-btn'); favBtn.classList.remove('hidden');
+            if (!chat) return;
+
+            const title = getChatTitle(chat);
+            document.getElementById('current-chat-title').textContent = title;
+            document.getElementById('current-chat-date').textContent = new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeStyle: 'short' }).format(chat.date);
+
+            const projBtn = document.getElementById('project-hash');
+            projBtn.textContent = chat.projectName || (chat.projectHash ? chat.projectHash.substring(0, 8) : "N/A");
+            projBtn.dataset.project = chat.projectName || chat.projectHash || "";
+            projBtn.classList.remove('hidden');
+
+            const favBtn = document.getElementById('fav-btn');
+            favBtn.classList.remove('hidden');
             favBtn.querySelector('i').className = favorites.has(chatId) ? "ph ph-star-fill text-lg text-yellow-500" : "ph ph-star text-lg";
 
-            const lastModel = [...chat.messages].reverse().find(m => m.model);
+            const lastModel = [...chat.messages].reverse().find(m => m.model)?.model;
             const modelEl = document.getElementById('current-chat-model');
-            if(lastModel) { modelEl.textContent = lastModel.model; modelEl.classList.remove('hidden'); } else modelEl.classList.add('hidden');
+            if (lastModel) {
+                modelEl.textContent = lastModel;
+                modelEl.classList.remove('hidden');
+            } else {
+                modelEl.classList.add('hidden');
+            }
 
             const container = document.getElementById('messages-container');
             container.innerHTML = '';
 
-            const processedMsgs = [];
+            // Filter out pure function response messages (tool execution returns already bound to Gemini toolCalls)
+            const displayMsgs = [];
             for (let i = 0; i < chat.messages.length; i++) {
                 const msg = chat.messages[i];
-                if (msg.type === 'info' && msg.content.toLowerCase().includes('cancelled')) {
-                    if (i + 1 < chat.messages.length) chat.messages[i+1]._cancelledBefore = true;
-                    else if (processedMsgs.length > 0) processedMsgs[processedMsgs.length - 1]._cancelledAfter = true;
-                } else processedMsgs.push(msg);
+                if (isPureToolResponse(msg)) continue;
+
+                if (msg.type === 'info' && typeof msg.content === 'string' && msg.content.toLowerCase().includes('cancelled')) {
+                    if (i + 1 < chat.messages.length) chat.messages[i + 1]._cancelledBefore = true;
+                    else if (displayMsgs.length > 0) displayMsgs[displayMsgs.length - 1]._cancelledAfter = true;
+                } else {
+                    displayMsgs.push(msg);
+                }
             }
 
-            processedMsgs.forEach(msg => {
-                if (msg.type === 'info' && !msg._cancelledAfter) return;
-                const isUser = msg.type === 'user';
-                const wrapper = document.createElement('div');
-                wrapper.className = `flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`;
-                const bubble = document.createElement('div');
-                const baseClasses = "chat-content max-w-[95%] md:max-w-[85%] rounded-2xl px-5 py-4 shadow-sm leading-relaxed overflow-hidden relative group transition-all";
-                const userClasses = "bg-blue-600 text-white rounded-tr-none prose-headings:text-white prose-a:text-blue-100 prose-code:text-blue-100 prose-strong:text-white";
-                const modelClasses = "bg-white dark:bg-darkpanel text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none";
-                bubble.className = `${baseClasses} ${isUser ? userClasses : modelClasses}`;
+            if (displayMsgs.length === 0) {
+                container.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-400"><p>This session is empty.</p></div>';
+                return;
+            }
 
-                if (msg._cancelledBefore) {
-                     bubble.classList.add('ring-2', 'ring-orange-400', 'ring-offset-2', 'dark:ring-offset-darkbg');
-                     bubble.innerHTML += `<div class="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 text-xs px-2 py-1 mb-2 rounded flex items-center gap-1 font-bold"><i class="ph ph-warning"></i> Generation Cancelled</div>`;
+            displayMsgs.forEach(msg => {
+                if (msg.type === 'info' && !msg._cancelledAfter) {
+                    // Render subtle info badge (e.g. topic update)
+                    const infoText = extractMessageText(msg.content);
+                    if (infoText) {
+                        const infoWrap = document.createElement('div');
+                        infoWrap.className = "flex justify-center my-3 no-print";
+                        infoWrap.innerHTML = `<span class="px-3 py-1 rounded-full text-xs bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><i class="ph ph-info"></i> ${escapeHtml(infoText)}</span>`;
+                        container.appendChild(infoWrap);
+                    }
+                    return;
                 }
 
-                if (msg.thoughts?.length) {
+                const isUser = msg.type === 'user';
+                const isError = msg.type === 'error';
+
+                const wrapper = document.createElement('div');
+                wrapper.className = `flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`;
+
+                const bubble = document.createElement('div');
+                const baseClasses = "chat-content max-w-[95%] md:max-w-[85%] rounded-2xl px-5 py-4 shadow-sm leading-relaxed overflow-hidden relative group transition-all";
+                let colorClasses = "bg-white dark:bg-darkpanel text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none";
+
+                if (isUser) {
+                    colorClasses = "bg-blue-600 text-white rounded-tr-none prose-headings:text-white prose-a:text-blue-100 prose-code:text-blue-100 prose-strong:text-white";
+                } else if (isError) {
+                    colorClasses = "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-tl-none";
+                }
+
+                bubble.className = `${baseClasses} ${colorClasses}`;
+
+                if (msg._cancelledBefore) {
+                    bubble.classList.add('ring-2', 'ring-orange-400', 'ring-offset-2', 'dark:ring-offset-darkbg');
+                    bubble.innerHTML += `<div class="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 text-xs px-2 py-1 mb-2 rounded flex items-center gap-1 font-bold"><i class="ph ph-warning"></i> Generation Cancelled</div>`;
+                }
+
+                // Thoughts Collapsible
+                if (msg.thoughts && msg.thoughts.length) {
                     const details = document.createElement('details');
                     details.className = "mb-3 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-900/50 no-print";
-                    details.innerHTML = `<summary class="p-2 text-xs font-bold text-slate-500 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"><i class="ph ph-brain text-purple-500"></i> Thought (${msg.thoughts.length} step)</summary><div class="p-3 text-xs space-y-2 border-t border-slate-200 dark:border-slate-700">${msg.thoughts.map((t,i) => `<div class="pl-2 border-l-2 border-purple-400"><div class="font-bold dark:text-slate-300">${i+1}. ${escapeHtml(t.subject)}</div><div class="opacity-70">${escapeHtml(t.description)}</div></div>`).join('')}</div>`;
+                    details.innerHTML = `
+                        <summary class="p-2 text-xs font-bold text-slate-500 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800">
+                            <i class="ph ph-brain text-purple-500 text-sm"></i> Thought (${msg.thoughts.length} step${msg.thoughts.length > 1 ? 's' : ''})
+                        </summary>
+                        <div class="p-3 text-xs space-y-2 border-t border-slate-200 dark:border-slate-700">
+                            ${msg.thoughts.map((t, i) => `
+                                <div class="pl-2 border-l-2 border-purple-400">
+                                    <div class="font-bold dark:text-slate-300">${i + 1}. ${escapeHtml(t.subject || 'Reasoning')}</div>
+                                    <div class="opacity-75 mt-0.5 whitespace-pre-wrap">${escapeHtml(t.description || '')}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
                     bubble.appendChild(details);
                 }
 
+                // User session context collapsible
+                const rawContentText = extractMessageText(msg.content);
+                const sessionCtx = extractSessionContext(rawContentText);
+                const promptText = cleanSessionContext(rawContentText);
+
+                if (isUser && sessionCtx) {
+                    const ctxDetails = document.createElement('details');
+                    ctxDetails.className = "mb-3 rounded bg-blue-700/40 border border-blue-400/30 p-2 text-xs text-blue-100 no-print";
+                    ctxDetails.innerHTML = `
+                        <summary class="cursor-pointer font-medium flex items-center gap-1.5 hover:text-white">
+                            <i class="ph ph-brackets-curly"></i> Session Context &bull; ${escapeHtml(chat.projectName || 'Environment')}
+                        </summary>
+                        <pre class="mt-2 p-2 bg-blue-950/60 rounded text-[11px] max-h-56 overflow-y-auto whitespace-pre-wrap font-mono border border-blue-400/20">${escapeHtml(sessionCtx)}</pre>
+                    `;
+                    bubble.appendChild(ctxDetails);
+                }
+
+                // Main Message Content
                 const contentDiv = document.createElement('div');
-                contentDiv.className = `prose ${isUser?'prose-invert':'dark:prose-invert'} max-w-none`;
-                contentDiv.innerHTML = marked.parse(msg.content || "");
+                contentDiv.className = `prose ${isUser ? 'prose-invert' : 'dark:prose-invert'} max-w-none text-sm break-words`;
+                
+                if (isUser) {
+                    if (promptText) {
+                        contentDiv.innerHTML = marked.parse(promptText);
+                    } else if (sessionCtx) {
+                        contentDiv.innerHTML = '<span class="italic text-xs text-blue-200 opacity-90"><i class="ph ph-sparkle mr-1"></i>Session initialized with environment context</span>';
+                    } else {
+                        contentDiv.innerHTML = marked.parse(rawContentText || "");
+                    }
+                } else if (isError) {
+                    contentDiv.innerHTML = `<div class="flex items-start gap-2"><i class="ph ph-warning-circle text-lg shrink-0 mt-0.5"></i><div class="whitespace-pre-wrap font-mono text-xs">${escapeHtml(rawContentText)}</div></div>`;
+                } else {
+                    contentDiv.innerHTML = marked.parse(rawContentText || "");
+                }
                 bubble.appendChild(contentDiv);
 
-                if (msg.toolCalls?.length) {
+                // Tool Calls Collapsible
+                if (msg.toolCalls && msg.toolCalls.length) {
                     const tDetails = document.createElement('details');
-                    tDetails.className = "mt-3 border border-slate-200 dark:border-slate-700 rounded bg-slate-900 text-slate-200 no-print";
-                    if(msg.toolCalls.some(c => c.result?.[0]?.functionResponse?.response?.error)) tDetails.open = true;
-                    tDetails.innerHTML = `<summary class="p-2 text-xs font-mono flex items-center justify-between cursor-pointer hover:bg-slate-800"><span class="flex items-center gap-2 text-green-400"><i class="ph ph-terminal"></i> Terminal (${msg.toolCalls.length})</span></summary><div class="p-3 overflow-x-auto text-[10px] font-mono space-y-4 bg-black/30">${msg.toolCalls.map(c => { const resp = c.result?.[0]?.functionResponse?.response || {}; return `<div><div class="text-green-300 font-bold mb-1">$ ${escapeHtml(c.args.command || c.name)}</div><div class="opacity-80 whitespace-pre-wrap pl-2 border-l border-slate-600">${escapeHtml(resp.output || resp.error || "(No output)")}</div></div>`; }).join('')}</div>`;
+                    tDetails.className = "mt-3 border border-slate-300 dark:border-slate-700 rounded bg-slate-900 text-slate-200 no-print";
+                    
+                    const hasError = msg.toolCalls.some(c => c.result?.[0]?.functionResponse?.response?.error);
+                    if (hasError) tDetails.open = true;
+
+                    tDetails.innerHTML = `
+                        <summary class="p-2 text-xs font-mono flex items-center justify-between cursor-pointer hover:bg-slate-800">
+                            <span class="flex items-center gap-2 ${hasError ? 'text-amber-400' : 'text-green-400'}">
+                                <i class="ph ph-terminal text-sm"></i> Tools & Terminal (${msg.toolCalls.length})
+                            </span>
+                        </summary>
+                        <div class="p-3 overflow-x-auto text-[11px] font-mono space-y-4 bg-black/40 max-h-96">
+                            ${msg.toolCalls.map(c => {
+                                const resp = c.result?.[0]?.functionResponse?.response || {};
+                                const output = resp.output || resp.error || (typeof c.result === 'string' ? c.result : "") || "(No output)";
+                                const outputStr = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+
+                                let cmdHeader = `$ ${c.name}`;
+                                if (c.args) {
+                                    if (c.args.command) cmdHeader = `$ ${c.args.command}`;
+                                    else if (c.args.file_path) cmdHeader = `${c.name}: ${c.args.file_path}`;
+                                    else if (c.args.pattern) cmdHeader = `${c.name}: "${c.args.pattern}"`;
+                                    else if (Object.keys(c.args).length > 0) cmdHeader = `${c.name}(${Object.keys(c.args).join(', ')})`;
+                                }
+
+                                return `
+                                    <div class="border-b border-slate-800 pb-3 last:border-0 last:pb-0">
+                                        <div class="text-green-300 font-bold mb-1">${escapeHtml(cmdHeader)}</div>
+                                        <div class="opacity-80 whitespace-pre-wrap pl-2 border-l border-slate-700 max-h-60 overflow-y-auto">${escapeHtml(outputStr)}</div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
                     bubble.appendChild(tDetails);
                 }
 
+                // Bubble Footer
                 const footer = document.createElement('div');
-                footer.className = `flex items-center justify-between mt-2 pt-2 border-t ${isUser?'border-white/20':'border-slate-200 dark:border-slate-700'} no-print`;
+                footer.className = `flex items-center justify-between mt-2 pt-2 border-t ${isUser ? 'border-white/20' : 'border-slate-200 dark:border-slate-700/60'} no-print text-[11px]`;
+
                 const copyBtn = document.createElement('button');
                 copyBtn.innerHTML = '<i class="ph ph-copy"></i>';
-                copyBtn.className = "opacity-50 hover:opacity-100 text-xs mr-auto transition-opacity";
-                copyBtn.onclick = () => navigator.clipboard.writeText(msg.content);
+                copyBtn.title = "Copy message";
+                copyBtn.className = "opacity-60 hover:opacity-100 transition-opacity mr-auto";
+                copyBtn.onclick = () => {
+                    const textToCopy = isUser ? (promptText || rawContentText) : rawContentText;
+                    navigator.clipboard.writeText(textToCopy);
+                    copyBtn.innerHTML = '<i class="ph ph-check text-green-400"></i>';
+                    setTimeout(() => copyBtn.innerHTML = '<i class="ph ph-copy"></i>', 1500);
+                };
                 footer.appendChild(copyBtn);
+
                 const rightDiv = document.createElement('div');
                 rightDiv.className = "flex items-center gap-3";
+
+                if (msg.tokens?.total) {
+                    const tokenBadge = document.createElement('span');
+                    tokenBadge.className = "text-[10px] opacity-60 font-mono";
+                    tokenBadge.title = `Input: ${msg.tokens.input || 0}, Output: ${msg.tokens.output || 0}`;
+                    tokenBadge.textContent = `${msg.tokens.total.toLocaleString()} tokens`;
+                    rightDiv.appendChild(tokenBadge);
+                }
+
                 const ttsBtn = document.createElement('button');
                 ttsBtn.innerHTML = '<i class="ph ph-play"></i>';
-                ttsBtn.className = `opacity-70 hover:opacity-100 text-sm transition-all`;
-                ttsBtn.onclick = () => toggleTTS(msg.content, msg.id, ttsBtn);
+                ttsBtn.title = "Read aloud";
+                ttsBtn.className = "opacity-60 hover:opacity-100 transition-all";
+                ttsBtn.onclick = () => toggleTTS(isUser ? (promptText || rawContentText) : rawContentText, msg.id, ttsBtn);
                 rightDiv.appendChild(ttsBtn);
-                if(msg.timestamp) {
+
+                if (msg.timestamp) {
                     const time = document.createElement('span');
                     time.className = "text-[10px] opacity-60";
-                    time.textContent = new Date(msg.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+                    time.textContent = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     rightDiv.appendChild(time);
                 }
+
                 footer.appendChild(rightDiv);
                 bubble.appendChild(footer);
                 wrapper.appendChild(bubble);
@@ -504,8 +1121,11 @@
 
         function toggleCurrentFavorite() {
             if (!currentChatId) return;
-            if (favorites.has(currentChatId)) favorites.delete(currentChatId); else favorites.add(currentChatId);
-            saveFavorites(); loadChat(currentChatId); filterChats(document.getElementById('search-input').value); 
+            if (favorites.has(currentChatId)) favorites.delete(currentChatId);
+            else favorites.add(currentChatId);
+            saveFavorites();
+            loadChat(currentChatId, false);
+            renderChatList();
         }
 
         function copyCode(btn) {
@@ -517,44 +1137,133 @@
             setTimeout(() => btn.innerHTML = original, 2000);
         }
 
+        // --- STATS MODAL ---
         function calculateStats() {
-            let totalTokens = 0; const models = {};
-            allChats.forEach(chat => { chat.messages.forEach(msg => { if (msg.tokens?.total) totalTokens += msg.tokens.total; if (msg.model) models[msg.model] = (models[msg.model] || 0) + 1; }); });
+            let totalTokens = 0;
+            let totalMessages = 0;
+            const models = {};
+            const projects = {};
+
+            allChats.forEach(chat => {
+                const proj = chat.projectName || "Unknown";
+                projects[proj] = (projects[proj] || 0) + 1;
+
+                chat.messages.forEach(msg => {
+                    totalMessages++;
+                    if (msg.tokens?.total) totalTokens += msg.tokens.total;
+                    if (msg.model) models[msg.model] = (models[msg.model] || 0) + 1;
+                });
+            });
+
             document.getElementById('stat-total-chats').textContent = allChats.length;
+            document.getElementById('stat-total-messages').textContent = totalMessages.toLocaleString();
             document.getElementById('stat-total-tokens').textContent = totalTokens.toLocaleString();
-            document.getElementById('stat-models-list').innerHTML = Object.entries(models).sort((a,b) => b[1] - a[1]).map(([name, count]) => `<div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1 last:border-0"><span>${name}</span><span class="font-bold">${count} msg</span></div>`).join('');
+
+            const modelsEl = document.getElementById('stat-models-list');
+            if (Object.keys(models).length === 0) {
+                modelsEl.innerHTML = '<div class="text-xs text-slate-400 italic">No model metadata recorded</div>';
+            } else {
+                modelsEl.innerHTML = Object.entries(models)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, count]) => `<div class="flex justify-between border-b border-slate-100 dark:border-slate-700/60 pb-1 last:border-0"><span>${escapeHtml(name)}</span><span class="font-bold font-mono">${count}</span></div>`)
+                    .join('');
+            }
+
+            const projectsEl = document.getElementById('stat-projects-list');
+            if (Object.keys(projects).length === 0) {
+                projectsEl.innerHTML = '<div class="text-xs text-slate-400 italic">No project data recorded</div>';
+            } else {
+                projectsEl.innerHTML = Object.entries(projects)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, count]) => `<div class="flex justify-between border-b border-slate-100 dark:border-slate-700/60 pb-1 last:border-0 cursor-pointer hover:text-blue-500" onclick="toggleStats(); filterByProject('${escapeHtml(name)}')"><span>${escapeHtml(name)}</span><span class="font-bold font-mono">${count} chats</span></div>`)
+                    .join('');
+            }
         }
 
+        // --- EXPORT & TTS ---
         function exportChat(type) {
             const chat = allChats.find(c => c.id === currentChatId);
             if (!chat) return;
+            const title = getChatTitle(chat);
+
             if (type === 'md') {
-                let md = `# Chat ${chat.id}\nDate: ${chat.date.toLocaleString()}\n\n`;
-                chat.messages.forEach(m => { md += `### ${m.type.toUpperCase()}\n${m.content}\n\n`; });
-                downloadFile(`chat-${chat.id}.md`, md, 'text/markdown');
+                let md = `# ${title}\n\n`;
+                md += `- **Date:** ${chat.date.toLocaleString()}\n`;
+                md += `- **Project:** ${chat.projectName}\n`;
+                md += `- **Session ID:** \`${chat.id}\`\n\n---\n\n`;
+
+                chat.messages.forEach(m => {
+                    if (isPureToolResponse(m)) return;
+                    const text = cleanSessionContext(extractMessageText(m.content));
+                    if (!text && m.type === 'info') return;
+                    
+                    md += `### ${m.type.toUpperCase()}\n\n${text || "(Empty)"}\n\n`;
+                    if (m.toolCalls && m.toolCalls.length) {
+                        md += `#### Tools (${m.toolCalls.length})\n\n`;
+                        m.toolCalls.forEach(tc => {
+                            const resp = tc.result?.[0]?.functionResponse?.response?.output || "";
+                            md += `\`\`\`bash\n# ${tc.name}\n${typeof resp === 'string' ? resp : JSON.stringify(resp, null, 2)}\n\`\`\`\n\n`;
+                        });
+                    }
+                    md += `---\n\n`;
+                });
+                downloadFile(`gemini-chat-${chat.id.slice(0, 8)}.md`, md, 'text/markdown');
             } else if (type === 'html') {
-                const html = `<html><body style="font-family:sans-serif; max-width:800px; margin:0 auto; padding:20px;"><h1>Chat Export</h1><p>${chat.date.toLocaleString()}</p><hr/>${document.getElementById('messages-container').innerHTML}</body></html>`;
-                downloadFile(`chat-${chat.id}.html`, html, 'text/html');
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:850px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#334155}pre{background:#0f172a;color:#f8fafc;padding:1rem;border-radius:6px;overflow-x:auto}code{font-family:monospace}.msg{margin-bottom:1.5rem;padding:1rem;border-radius:8px;border:1px solid #e2e8f0}.user{background:#eff6ff;border-color:#bfdbfe}.model{background:#f8fafc}</style></head><body><h1>${escapeHtml(title)}</h1><p><small>${chat.date.toLocaleString()} | Project: ${escapeHtml(chat.projectName)}</small></p><hr/>${document.getElementById('messages-container').innerHTML}</body></html>`;
+                downloadFile(`gemini-chat-${chat.id.slice(0, 8)}.html`, html, 'text/html');
             }
         }
 
         function downloadFile(filename, content, type) {
-            const blob = new Blob([content], {type}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         function toggleTTS(text, msgId, btn) {
             const synth = window.speechSynthesis;
-            if (isSpeaking && currentUtterance?.msgId === msgId) { synth.cancel(); btn.innerHTML = '<i class="ph ph-play"></i>'; btn.classList.remove('text-red-500'); isSpeaking = false; return; }
-            synth.cancel(); document.querySelectorAll('button i.ph-stop').forEach(el => { el.classList.replace('ph-stop', 'ph-play'); el.parentElement.classList.remove('text-red-500'); });
+            if (!synth) return;
+            if (isSpeaking && currentUtterance?.msgId === msgId) {
+                synth.cancel();
+                btn.innerHTML = '<i class="ph ph-play"></i>';
+                btn.classList.remove('text-red-500');
+                isSpeaking = false;
+                return;
+            }
+            synth.cancel();
+            document.querySelectorAll('button i.ph-stop').forEach(el => {
+                el.classList.replace('ph-stop', 'ph-play');
+                el.parentElement.classList.remove('text-red-500');
+            });
             const sel = window.getSelection().toString().trim();
-            const u = new SpeechSynthesisUtterance((sel || text).replace(/[#*`_]/g, '').replace(/https?:\]/g, 'link'));
-            u.lang = 'en-US'; u.rate = parseFloat(document.getElementById('tts-speed').value); u.msgId = msgId;
-            u.onstart = () => { isSpeaking = true; currentUtterance = u; btn.innerHTML = '<i class="ph ph-stop"></i>'; btn.classList.add('text-red-500'); };
-            u.onend = () => { isSpeaking = false; btn.innerHTML = '<i class="ph ph-play"></i>'; btn.classList.remove('text-red-500'); };
+            const cleanText = (sel || text).replace(/[#*`_]/g, '').replace(/https?:\/\/[^\s]+/g, 'link');
+            const u = new SpeechSynthesisUtterance(cleanText);
+            u.lang = 'en-US';
+            u.rate = parseFloat(document.getElementById('tts-speed').value) || 1;
+            u.msgId = msgId;
+            u.onstart = () => {
+                isSpeaking = true;
+                currentUtterance = u;
+                btn.innerHTML = '<i class="ph ph-stop"></i>';
+                btn.classList.add('text-red-500');
+            };
+            u.onend = () => {
+                isSpeaking = false;
+                btn.innerHTML = '<i class="ph ph-play"></i>';
+                btn.classList.remove('text-red-500');
+            };
             synth.speak(u);
         }
 
-        function escapeHtml(text) { if (!text) return ""; if (typeof text !== 'string') text = JSON.stringify(text); return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return "";
+            if (typeof text !== 'string') text = String(text);
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
     </script>
 </body>
 </html>
