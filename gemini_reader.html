@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini CLI Reader V3.3</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gemini: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7', 900: '#0c4a6e' },
+                        darkbg: '#0f172a', darkpanel: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Markdown & Highlight -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        :root { --chat-zoom: 1rem; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        
+        .chat-content { font-size: var(--chat-zoom); }
+        .sidebar-collapsed { width: 0 !important; padding: 0 !important; overflow: hidden; }
+        #sidebar { transition: width 0.3s ease; }
+        
+        .code-block-wrapper { margin: 1em 0; border-radius: 0.5rem; overflow: hidden; border: 1px solid #334155; }
+        .code-header { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 0.5rem 1rem; color: #94a3b8; font-family: monospace; font-size: 0.8rem; border-bottom: 1px solid #334155; }
+        .code-content { margin: 0; padding: 0; }
+        .code-content pre { margin: 0; border-radius: 0; }
+        
+        @media print {
+            #sidebar, header, #landing-screen, .no-print { display: none !important; }
+            body, #app, main, #messages-container { height: auto !important; overflow: visible !important; background: white !important; color: black !important; }
+            .chat-content { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-darkbg text-slate-800 transition-colors duration-200 h-screen overflow-hidden flex flex-col">
+
+    <div id="app" class="flex-1 flex overflow-hidden relative">
+        <!-- LANDING -->
+        <div id="landing-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-darkbg p-6 transition-all duration-300">
+            <div class="max-w-2xl w-full text-center space-y-8">
+                <div class="inline-block p-4 rounded-full bg-blue-50 dark:bg-slate-800 mb-4 shadow-inner">
+                    <i class="ph ph-chat-circle-text text-6xl text-blue-500"></i>
+                </div>
+                <h1 class="text-4xl font-bold text-slate-900 dark:text-white">Gemini CLI Reader <span class="text-sm align-top text-blue-500 font-mono">v3.3</span></h1>
+                <p class="text-lg text-slate-600 dark:text-slate-400">
+                    The ultimate local Hub for your chats.<br>
+                    <span class="text-sm opacity-75">Global search, Export, Stats, and Auto-refresh.</span>
+                </p>
+                <button onclick="selectFolder()" class="group relative inline-flex items-center justify-center px-10 py-4 font-semibold text-white transition-all duration-200 bg-blue-600 rounded-lg hover:bg-blue-700 shadow-lg hover:shadow-blue-500/40 transform hover:-translate-y-1">
+                    <i class="ph ph-folder-open text-xl mr-2"></i> Open .gemini folder
+                </button>
+                <div class="mt-8 text-xs text-slate-400">Supports Windows, MacOS & Linux &bull; 100% Local</div>
+                 <!-- OS Hints -->
+                <div class="mt-12 text-left bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm w-full">
+                     <h3 class="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center">
+                        <i class="ph ph-info mr-2"></i> Where is the chat folder?
+                     </h3>
+                     <div class="grid md:grid-cols-3 gap-6 text-sm">
+                        <div class="space-y-2">
+                            <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-windows-logo text-blue-500"></i> Windows</div>
+                            <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">C:\Users\NAME\.gemini</code>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-apple-logo"></i> MacOS</div>
+                            <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">/Users/name/.gemini</code>
+                        </div>
+                         <div class="space-y-2">
+                            <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-linux-logo text-orange-500"></i> Linux</div>
+                            <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">/home/name/.gemini</code>
+                        </div>
+                     </div>
+                </div>
+                <p class="text-xs text-red-500 mt-4 hidden" id="error-msg"></p>
+            </div>
+        </div>
+
+        <!-- MAIN LAYOUT -->
+        <div id="main-layout" class="flex w-full h-full hidden opacity-0 transition-opacity duration-500">
+            <!-- SIDEBAR -->
+            <aside id="sidebar" class="w-80 flex-shrink-0 flex flex-col bg-white dark:bg-darkpanel border-r border-slate-200 dark:border-slate-700 relative z-20 h-full shadow-xl md:shadow-none">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col gap-3 bg-slate-50 dark:bg-slate-800/50 backdrop-blur">
+                    <div class="flex justify-between items-center">
+                        <h2 class="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <i class="ph ph-chats-circle text-blue-500"></i> Library
+                        </h2>
+                        <div class="flex gap-1">
+                            <button onclick="toggleStats()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500"><i class="ph ph-chart-pie-slice"></i></button>
+                            <button onclick="toggleSidebar()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500"><i class="ph ph-caret-left"></i></button>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-slate-400"></i>
+                        <input type="text" id="search-input" placeholder="Search..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-9 pr-8 text-sm focus:outline-none focus:border-blue-500 dark:text-slate-200 placeholder-slate-400 transition-colors">
+                        <button id="clear-search" onclick="clearSearch()" class="absolute right-2 top-2.5 text-slate-400 hover:text-red-500 hidden"><i class="ph ph-x-circle"></i></button>
+                    </div>
+                    <div class="flex gap-2 text-xs">
+                        <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium">All</button>
+                        <button onclick="setFilter('favorites')" id="filter-fav" class="flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"><i class="ph ph-star-fill text-yellow-500"></i> Favorites</button>
+                    </div>
+                </div>
+                <div id="chat-list" class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1"></div>
+                <div class="p-2 border-t border-slate-200 dark:border-slate-700 text-[10px] text-center text-slate-400 flex justify-between px-4">
+                    <span id="scan-status">Ready</span><span class="flex items-center gap-1"><i class="ph ph-arrows-clockwise"></i> Auto</span>
+                </div>
+            </aside>
+
+            <!-- CHAT AREA -->
+            <main class="flex-1 flex flex-col bg-slate-50 dark:bg-darkbg relative min-w-0">
+                <header class="h-16 bg-white dark:bg-darkpanel border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between shadow-sm z-10 shrink-0 gap-4">
+                    <div class="flex items-center gap-3 overflow-hidden min-w-0">
+                        <button onclick="toggleSidebar()" id="sidebar-toggle-btn" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full md:hidden"><i class="ph ph-list text-2xl"></i></button>
+                        <div class="flex flex-col overflow-hidden">
+                            <div class="flex items-center gap-2">
+                                <h2 id="current-chat-title" class="font-semibold text-slate-800 dark:text-white truncate">Select a chat</h2>
+                                <button id="fav-btn" onclick="toggleCurrentFavorite()" class="hidden text-slate-400 hover:text-yellow-500 transition-colors"><i class="ph ph-star text-lg"></i></button>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                <span id="current-chat-date"></span>
+                                <span id="current-chat-model" class="hidden px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-mono"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 md:gap-3 shrink-0">
+                        <div class="hidden md:flex items-center gap-1 group bg-slate-100 dark:bg-slate-800 rounded-full px-2 border border-slate-200 dark:border-slate-700">
+                            <i class="ph ph-speaker-high text-slate-400 text-xs"></i>
+                            <input type="range" min="0.5" max="2" step="0.1" value="1" id="tts-speed" class="w-16 h-1 accent-blue-600" title="Speed">
+                        </div>
+                        <div class="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <button onclick="adjustZoom(-0.1)" class="hover:text-blue-500 dark:text-slate-400"><i class="ph ph-minus"></i></button>
+                            <span class="text-xs font-mono w-8 text-center" id="zoom-level">100%</span>
+                            <button onclick="adjustZoom(0.1)" class="hover:text-blue-500 dark:text-slate-400"><i class="ph ph-plus"></i></button>
+                        </div>
+                        <div class="relative group">
+                            <button class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="ph ph-export"></i></button>
+                            <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 hidden group-hover:block z-50">
+                                <button onclick="exportChat('md')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-file-text mr-2"></i> Markdown (.md)</button>
+                                <button onclick="exportChat('html')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-browsers mr-2"></i> Portable HTML</button>
+                                <button onclick="window.print()" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-printer mr-2"></i> Print / PDF</button>
+                            </div>
+                        </div>
+                        <button id="project-hash" onclick="filterByProject(this.innerText)" class="hidden lg:inline-block text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors" title="Filter by this project"></button>
+                         <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><i id="theme-icon" class="ph ph-moon"></i></button>
+                    </div>
+                </header>
+                <div id="messages-container" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth">
+                    <div class="h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600">
+                        <i class="ph ph-chats-circle text-6xl mb-4 opacity-50"></i>
+                        <p class="text-lg font-medium">Select a chat</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- STATS MODAL -->
+        <div id="stats-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+            <div class="bg-white dark:bg-darkpanel w-full max-w-lg rounded-2xl shadow-2xl p-6 transform transition-all scale-100">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-slate-800 dark:text-white">Project Statistics</h3>
+                    <button onclick="toggleStats()" class="text-slate-400 hover:text-red-500"><i class="ph ph-x text-xl"></i></button>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-blue-50 dark:bg-slate-800 p-4 rounded-xl text-center">
+                        <div class="text-3xl font-bold text-blue-600 dark:text-blue-400" id="stat-total-chats">0</div>
+                        <div class="text-xs text-slate-500 uppercase tracking-wide">Conversations</div>
+                    </div>
+                    <div class="bg-purple-50 dark:bg-slate-800 p-4 rounded-xl text-center">
+                        <div class="text-3xl font-bold text-purple-600 dark:text-purple-400" id="stat-total-tokens">0</div>
+                        <div class="text-xs text-slate-500 uppercase tracking-wide">Total Tokens</div>
+                    </div>
+                </div>
+                <h4 class="text-sm font-semibold mb-3 dark:text-slate-300">Models Used</h4>
+                <div id="stat-models-list" class="space-y-2 text-sm text-slate-600 dark:text-slate-400 max-h-40 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL ERROR HANDLER ---
+        window.onerror = function(msg, url, line, col, error) {
+            alert("JS Error: " + msg);
+            console.error(msg, error);
+            return false;
+        };
+
+        // --- STATE ---
+        let allChats = [], filteredChats = [], favorites = new Set();
+        let currentChatId = null, currentZoom = 1.0, isSpeaking = false;
+        let activeFilter = 'all', currentProjectFilter = null, searchTimeout = null;
+        let currentUtterance = null;
+        const state = { dirHandle: null };
+
+        // --- IMMEDIATE THEME INIT (Fixes Flash/Fail) ---
+        function initTheme() {
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                const icon = document.getElementById('theme-icon');
+                if(icon) icon.classList.replace('ph-moon', 'ph-sun');
+            }
+        }
+        initTheme(); // Run immediately! 
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme(); // Run again to sync icon
+            loadFavorites();
+
+            // --- ROBUST MARKED CONFIG ---
+            // Setup renderer for Code Copy
+            const renderer = new marked.Renderer();
+            const originalCode = renderer.code.bind(renderer);
+            
+            renderer.code = (code, language) => {
+                let highlighted = code;
+                if (language && hljs.getLanguage(language)) {
+                    highlighted = hljs.highlight(code, { language }).value;
+                } else {
+                    highlighted = hljs.highlightAuto(code).value;
+                }
+                
+                return `<div class="code-block-wrapper">
+                            <div class="code-header">
+                                <span>${language || 'text'}</span>
+                                <button class="hover:text-white transition-colors flex items-center gap-1" onclick="copyCode(this)">
+                                    <i class="ph ph-copy"></i> Copy
+                                </button>
+                            </div>
+                            <div class="code-content"><pre><code class="hljs ${language}">${highlighted}</code></pre></div>
+                            <div class="hidden raw-code">${escapeHtml(code)}</div> 
+                        </div>`;
+            };
+
+            marked.setOptions({ renderer: renderer, breaks: true, gfm: true });
+
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                const btn = document.getElementById('clear-search');
+                e.target.value ? btn.classList.remove('hidden') : btn.classList.add('hidden');
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => filterChats(e.target.value), 300);
+            });
+            
+            document.getElementById('tts-speed').addEventListener('input', (e) => {});
+        });
+
+        function loadFavorites() { try { const saved = localStorage.getItem('gemini_favs'); if (saved) favorites = new Set(JSON.parse(saved)); } catch(e) {} }
+        function saveFavorites() { localStorage.setItem('gemini_favs', JSON.stringify([...favorites])); }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+            const icon = document.getElementById('theme-icon');
+            icon.classList.contains('ph-moon') ? icon.classList.replace('ph-moon', 'ph-sun') : icon.classList.replace('ph-sun', 'ph-moon');
+        }
+
+        function adjustZoom(delta) {
+            currentZoom = Math.max(0.7, Math.min(1.8, currentZoom + delta));
+            document.documentElement.style.setProperty('--chat-zoom', `${currentZoom}rem`);
+            document.getElementById('zoom-level').textContent = `${Math.round(currentZoom * 100)}%`;
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle(window.innerWidth < 768 ? '-translate-x-full' : 'sidebar-collapsed');
+            const btn = document.getElementById('sidebar-toggle-btn');
+            if (window.innerWidth >= 768) btn.classList.toggle('md:hidden');
+        }
+
+        function toggleStats() {
+            const modal = document.getElementById('stats-modal');
+            if (modal.classList.contains('hidden')) { calculateStats(); modal.classList.remove('hidden'); }
+            else { modal.classList.add('hidden'); }
+        }
+
+        async function selectFolder() {
+            try {
+                // Feature check
+                if (!window.showDirectoryPicker) { throw new Error("Your browser does not support File System Access API. Please use Chrome, Edge or Opera."); }
+                const dirHandle = await window.showDirectoryPicker({ mode: 'read' }); // Removed 'id' to be safe
+                state.dirHandle = dirHandle;
+                document.getElementById('landing-screen').classList.add('hidden');
+                const main = document.getElementById('main-layout');
+                main.classList.remove('hidden');
+                requestAnimationFrame(() => main.classList.remove('opacity-0'));
+                await scanDirectory(dirHandle);
+                setInterval(() => scanDirectory(dirHandle, true), 10000);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    document.getElementById('error-msg').textContent = err.message;
+                    document.getElementById('error-msg').classList.remove('hidden');
+                    console.error(err);
+                }
+            }
+        }
+
+        async function scanDirectory(dirHandle, isPolling = false) {
+            const tempChats = [];
+            const statusEl = document.getElementById('scan-status');
+            if(!isPolling) statusEl.textContent = "Scanning...";
+
+            try {
+                for await (const entry of getFilesRecursively(dirHandle)) {
+                    if (entry.name.endsWith('.json')) {
+                        try {
+                            const file = await entry.getFile();
+                            const txt = await file.text();
+                            const data = JSON.parse(txt);
+                            if (data.messages) {
+                                tempChats.push({
+                                    id: data.sessionId,
+                                    date: new Date(data.startTime || data.messages[0]?.timestamp),
+                                    messages: data.messages,
+                                    projectHash: data.projectHash,
+                                    filename: entry.name,
+                                    searchText: (data.messages.map(m => m.content).join(' ') + ' ' + (data.projectHash||'')).toLowerCase()
+                                });
+                            }
+                        } catch (e) {}
+                    }
+                }
+                
+                tempChats.sort((a, b) => b.date - a.date);
+                
+                if (tempChats.length !== allChats.length || tempChats[0]?.id !== allChats[0]?.id) {
+                    allChats = tempChats;
+                    filterChats(document.getElementById('search-input').value);
+                    if(!isPolling) statusEl.textContent = `Ready (${allChats.length} chats)`;
+                }
+            } catch (err) { statusEl.textContent = "Auto-scan Error"; console.error(err); }
+        }
+
+        async function* getFilesRecursively(entry) {
+            if (entry.kind === 'file') yield entry;
+            else if (entry.kind === 'directory') {
+                for await (const handle of entry.values()) yield* getFilesRecursively(handle);
+            }
+        }
+
+        function setFilter(type) {
+            activeFilter = type; currentProjectFilter = null;
+            document.getElementById('filter-all').className = type === 'all' ? "flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium transition-colors" : "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
+            document.getElementById('filter-fav').className = type === 'favorites' ? "flex-1 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 font-medium transition-colors" : "flex-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors";
+            filterChats(document.getElementById('search-input').value);
+        }
+
+        function filterByProject(hash) {
+            activeFilter = 'project'; currentProjectFilter = hash;
+            document.getElementById('filter-all').classList.remove('bg-blue-100', 'text-blue-600');
+            document.getElementById('filter-fav').classList.remove('bg-blue-100', 'text-blue-600');
+            document.getElementById('search-input').value = ""; filterChats("");
+        }
+
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('clear-search').classList.add('hidden');
+            filterChats('');
+        }
+
+        function filterChats(query) {
+            const q = query.toLowerCase();
+            filteredChats = allChats.filter(chat => {
+                const matchesSearch = !q || chat.searchText.includes(q);
+                let matchesFilter = true;
+                if (activeFilter === 'favorites') matchesFilter = favorites.has(chat.id);
+                if (activeFilter === 'project') matchesFilter = chat.projectHash === currentProjectFilter;
+                return matchesSearch && matchesFilter;
+            });
+            renderChatList();
+        }
+
+        function renderChatList() {
+            const listEl = document.getElementById('chat-list');
+            listEl.innerHTML = '';
+            if (filteredChats.length === 0) { listEl.innerHTML = '<div class="text-center text-slate-400 text-xs mt-10">No chats found</div>'; return; }
+            filteredChats.forEach(chat => {
+                let title = "Chat";
+                const firstUser = chat.messages.find(m => m.type === 'user');
+                if (firstUser) title = firstUser.content.split('\n')[0].slice(0, 40);
+                const isFav = favorites.has(chat.id);
+                const isActive = chat.id === currentChatId;
+                const item = document.createElement('div');
+                item.className = `p-3 mx-2 rounded-lg cursor-pointer mb-1 border-l-4 transition-all relative group ${isActive ? 'bg-blue-50 dark:bg-slate-800 border-blue-500 shadow-sm' : 'hover:bg-slate-100 dark:hover:bg-slate-700 border-transparent'}`;
+                item.onclick = () => loadChat(chat.id);
+                item.innerHTML = `<div class="flex justify-between items-start"><div class="font-semibold text-sm text-slate-700 dark:text-slate-200 truncate w-10/12">${escapeHtml(title)}</div>${isFav ? '<i class="ph ph-star-fill text-yellow-500 text-xs"></i>' : ''}</div><div class="text-[10px] text-slate-400 mt-1 flex justify-between"><span>${new Intl.DateTimeFormat('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}).format(chat.date)}</span><span class="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">${chat.projectHash ? chat.projectHash.substring(0,4) : ''}</span></div>`;
+                listEl.appendChild(item);
+            });
+        }
+
+        function loadChat(chatId) {
+            currentChatId = chatId;
+            filterChats(document.getElementById('search-input').value);
+            const chat = allChats.find(c => c.id === chatId);
+            
+            const firstUser = chat.messages.find(m => m.type === 'user');
+            document.getElementById('current-chat-title').textContent = firstUser ? firstUser.content.split('\n')[0].slice(0, 60) : "Chat";
+            document.getElementById('current-chat-date').textContent = new Intl.DateTimeFormat('en-US', {dateStyle:'full', timeStyle:'short'}).format(chat.date);
+            document.getElementById('project-hash').textContent = chat.projectHash || "N/A";
+            
+            const favBtn = document.getElementById('fav-btn'); favBtn.classList.remove('hidden');
+            favBtn.querySelector('i').className = favorites.has(chatId) ? "ph ph-star-fill text-lg text-yellow-500" : "ph ph-star text-lg";
+
+            const lastModel = [...chat.messages].reverse().find(m => m.model);
+            const modelEl = document.getElementById('current-chat-model');
+            if(lastModel) { modelEl.textContent = lastModel.model; modelEl.classList.remove('hidden'); } else modelEl.classList.add('hidden');
+
+            const container = document.getElementById('messages-container');
+            container.innerHTML = '';
+
+            const processedMsgs = [];
+            for (let i = 0; i < chat.messages.length; i++) {
+                const msg = chat.messages[i];
+                if (msg.type === 'info' && msg.content.toLowerCase().includes('cancelled')) {
+                    if (i + 1 < chat.messages.length) chat.messages[i+1]._cancelledBefore = true;
+                    else if (processedMsgs.length > 0) processedMsgs[processedMsgs.length - 1]._cancelledAfter = true;
+                } else processedMsgs.push(msg);
+            }
+
+            processedMsgs.forEach(msg => {
+                if (msg.type === 'info' && !msg._cancelledAfter) return;
+                const isUser = msg.type === 'user';
+                const wrapper = document.createElement('div');
+                wrapper.className = `flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`;
+                const bubble = document.createElement('div');
+                const baseClasses = "chat-content max-w-[95%] md:max-w-[85%] rounded-2xl px-5 py-4 shadow-sm leading-relaxed overflow-hidden relative group transition-all";
+                const userClasses = "bg-blue-600 text-white rounded-tr-none prose-headings:text-white prose-a:text-blue-100 prose-code:text-blue-100 prose-strong:text-white";
+                const modelClasses = "bg-white dark:bg-darkpanel text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none";
+                bubble.className = `${baseClasses} ${isUser ? userClasses : modelClasses}`;
+
+                if (msg._cancelledBefore) {
+                     bubble.classList.add('ring-2', 'ring-orange-400', 'ring-offset-2', 'dark:ring-offset-darkbg');
+                     bubble.innerHTML += `<div class="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 text-xs px-2 py-1 mb-2 rounded flex items-center gap-1 font-bold"><i class="ph ph-warning"></i> Generation Cancelled</div>`;
+                }
+
+                if (msg.thoughts?.length) {
+                    const details = document.createElement('details');
+                    details.className = "mb-3 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-900/50 no-print";
+                    details.innerHTML = `<summary class="p-2 text-xs font-bold text-slate-500 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"><i class="ph ph-brain text-purple-500"></i> Thought (${msg.thoughts.length} step)</summary><div class="p-3 text-xs space-y-2 border-t border-slate-200 dark:border-slate-700">${msg.thoughts.map((t,i) => `<div class="pl-2 border-l-2 border-purple-400"><div class="font-bold dark:text-slate-300">${i+1}. ${escapeHtml(t.subject)}</div><div class="opacity-70">${escapeHtml(t.description)}</div></div>`).join('')}</div>`;
+                    bubble.appendChild(details);
+                }
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = `prose ${isUser?'prose-invert':'dark:prose-invert'} max-w-none`;
+                contentDiv.innerHTML = marked.parse(msg.content || "");
+                bubble.appendChild(contentDiv);
+
+                if (msg.toolCalls?.length) {
+                    const tDetails = document.createElement('details');
+                    tDetails.className = "mt-3 border border-slate-200 dark:border-slate-700 rounded bg-slate-900 text-slate-200 no-print";
+                    if(msg.toolCalls.some(c => c.result?.[0]?.functionResponse?.response?.error)) tDetails.open = true;
+                    tDetails.innerHTML = `<summary class="p-2 text-xs font-mono flex items-center justify-between cursor-pointer hover:bg-slate-800"><span class="flex items-center gap-2 text-green-400"><i class="ph ph-terminal"></i> Terminal (${msg.toolCalls.length})</span></summary><div class="p-3 overflow-x-auto text-[10px] font-mono space-y-4 bg-black/30">${msg.toolCalls.map(c => { const resp = c.result?.[0]?.functionResponse?.response || {}; return `<div><div class="text-green-300 font-bold mb-1">$ ${escapeHtml(c.args.command || c.name)}</div><div class="opacity-80 whitespace-pre-wrap pl-2 border-l border-slate-600">${escapeHtml(resp.output || resp.error || "(No output)")}</div></div>`; }).join('')}</div>`;
+                    bubble.appendChild(tDetails);
+                }
+
+                const footer = document.createElement('div');
+                footer.className = `flex items-center justify-between mt-2 pt-2 border-t ${isUser?'border-white/20':'border-slate-200 dark:border-slate-700'} no-print`;
+                const copyBtn = document.createElement('button');
+                copyBtn.innerHTML = '<i class="ph ph-copy"></i>';
+                copyBtn.className = "opacity-50 hover:opacity-100 text-xs mr-auto transition-opacity";
+                copyBtn.onclick = () => navigator.clipboard.writeText(msg.content);
+                footer.appendChild(copyBtn);
+                const rightDiv = document.createElement('div');
+                rightDiv.className = "flex items-center gap-3";
+                const ttsBtn = document.createElement('button');
+                ttsBtn.innerHTML = '<i class="ph ph-play"></i>';
+                ttsBtn.className = `opacity-70 hover:opacity-100 text-sm transition-all`;
+                ttsBtn.onclick = () => toggleTTS(msg.content, msg.id, ttsBtn);
+                rightDiv.appendChild(ttsBtn);
+                if(msg.timestamp) {
+                    const time = document.createElement('span');
+                    time.className = "text-[10px] opacity-60";
+                    time.textContent = new Date(msg.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+                    rightDiv.appendChild(time);
+                }
+                footer.appendChild(rightDiv);
+                bubble.appendChild(footer);
+                wrapper.appendChild(bubble);
+                container.appendChild(wrapper);
+            });
+        }
+
+        function toggleCurrentFavorite() {
+            if (!currentChatId) return;
+            if (favorites.has(currentChatId)) favorites.delete(currentChatId); else favorites.add(currentChatId);
+            saveFavorites(); loadChat(currentChatId); filterChats(document.getElementById('search-input').value); 
+        }
+
+        function copyCode(btn) {
+            const wrapper = btn.closest('.code-block-wrapper');
+            const raw = wrapper.querySelector('.raw-code').textContent;
+            navigator.clipboard.writeText(raw);
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+            setTimeout(() => btn.innerHTML = original, 2000);
+        }
+
+        function calculateStats() {
+            let totalTokens = 0; const models = {};
+            allChats.forEach(chat => { chat.messages.forEach(msg => { if (msg.tokens?.total) totalTokens += msg.tokens.total; if (msg.model) models[msg.model] = (models[msg.model] || 0) + 1; }); });
+            document.getElementById('stat-total-chats').textContent = allChats.length;
+            document.getElementById('stat-total-tokens').textContent = totalTokens.toLocaleString();
+            document.getElementById('stat-models-list').innerHTML = Object.entries(models).sort((a,b) => b[1] - a[1]).map(([name, count]) => `<div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1 last:border-0"><span>${name}</span><span class="font-bold">${count} msg</span></div>`).join('');
+        }
+
+        function exportChat(type) {
+            const chat = allChats.find(c => c.id === currentChatId);
+            if (!chat) return;
+            if (type === 'md') {
+                let md = `# Chat ${chat.id}\nDate: ${chat.date.toLocaleString()}\n\n`;
+                chat.messages.forEach(m => { md += `### ${m.type.toUpperCase()}\n${m.content}\n\n`; });
+                downloadFile(`chat-${chat.id}.md`, md, 'text/markdown');
+            } else if (type === 'html') {
+                const html = `<html><body style="font-family:sans-serif; max-width:800px; margin:0 auto; padding:20px;"><h1>Chat Export</h1><p>${chat.date.toLocaleString()}</p><hr/>${document.getElementById('messages-container').innerHTML}</body></html>`;
+                downloadFile(`chat-${chat.id}.html`, html, 'text/html');
+            }
+        }
+
+        function downloadFile(filename, content, type) {
+            const blob = new Blob([content], {type}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+        }
+
+        function toggleTTS(text, msgId, btn) {
+            const synth = window.speechSynthesis;
+            if (isSpeaking && currentUtterance?.msgId === msgId) { synth.cancel(); btn.innerHTML = '<i class="ph ph-play"></i>'; btn.classList.remove('text-red-500'); isSpeaking = false; return; }
+            synth.cancel(); document.querySelectorAll('button i.ph-stop').forEach(el => { el.classList.replace('ph-stop', 'ph-play'); el.parentElement.classList.remove('text-red-500'); });
+            const sel = window.getSelection().toString().trim();
+            const u = new SpeechSynthesisUtterance((sel || text).replace(/[#*`_]/g, '').replace(/https?:\]/g, 'link'));
+            u.lang = 'en-US'; u.rate = parseFloat(document.getElementById('tts-speed').value); u.msgId = msgId;
+            u.onstart = () => { isSpeaking = true; currentUtterance = u; btn.innerHTML = '<i class="ph ph-stop"></i>'; btn.classList.add('text-red-500'); };
+            u.onend = () => { isSpeaking = false; btn.innerHTML = '<i class="ph ph-play"></i>'; btn.classList.remove('text-red-500'); };
+            synth.speak(u);
+        }
+
+        function escapeHtml(text) { if (!text) return ""; if (typeof text !== 'string') text = JSON.stringify(text); return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+    </script>
+</body>
+</html>
