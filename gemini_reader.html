@@ -942,12 +942,19 @@
             if (!text) return "";
             let cleaned = text.replace(/<session_context>[\s\S]*?<\/session_context>/gi, "");
             cleaned = cleaned.replace(/<hook_context>[\s\S]*?<\/hook_context>/gi, "");
+            cleaned = cleaned.replace(/--- Content from referenced files ---[\s\S]*?(?:--- End of content ---|$)/gi, "");
             return cleaned.trim();
         }
 
         function extractSessionContext(text) {
             if (!text) return null;
             const match = text.match(/<session_context>([\s\S]*?)<\/session_context>/i);
+            return match ? match[1].trim() : null;
+        }
+
+        function extractFilesContext(text) {
+            if (!text) return null;
+            const match = text.match(/--- Content from referenced files ---([\s\S]*?)(?:--- End of content ---|$)/i);
             return match ? match[1].trim() : null;
         }
 
@@ -1140,6 +1147,7 @@
                         id: msg.id || ('turn-' + turns.length),
                         userMsg: msg,
                         systemContext: extractSessionContext(rawText),
+                        filesContext: extractFilesContext(rawText),
                         cleanPrompt: cleanSessionContext(rawText),
                         rawText: rawText,
                         toolCalls: [],
@@ -1158,6 +1166,7 @@
                         id: 'init-turn',
                         userMsg: null,
                         systemContext: null,
+                        filesContext: null,
                         cleanPrompt: '',
                         rawText: '',
                         toolCalls: [],
@@ -1342,10 +1351,11 @@
 
         function renderTurnDetailSection(turn, chat) {
             const hasContext = Boolean(turn.systemContext);
+            const hasFiles = Boolean(turn.filesContext);
             const hasTools = turn.toolCalls && turn.toolCalls.length > 0;
             const hasThoughts = turn.thoughts && turn.thoughts.length > 0;
 
-            if (!hasContext && !hasTools && !hasThoughts) return '';
+            if (!hasContext && !hasFiles && !hasTools && !hasThoughts) return '';
 
             let html = `
                 <div class="turn-card" id="turn-detail-${turn.id}">
@@ -1366,6 +1376,21 @@
                             ${renderCodeWithLineNumbers(turn.systemContext, 'text')}
                         </div>
                         <div class="hidden raw-code">${escapeHtml(turn.systemContext)}</div>
+                    </div>
+                `;
+            }
+
+            if (hasFiles) {
+                html += `
+                    <div class="section-box">
+                        <div class="section-title" style="color:#818cf8;">
+                            <span><i class="ph ph-file-text"></i> Referenced File Contents</span>
+                            <button class="btn" onclick="copyCode(this)"><i class="ph ph-copy"></i> Copy</button>
+                        </div>
+                        <div class="code-content max-h-96 border border-slate-700">
+                            ${renderCodeWithLineNumbers(turn.filesContext, 'text')}
+                        </div>
+                        <div class="hidden raw-code">${escapeHtml(turn.filesContext)}</div>
                     </div>
                 `;
             }
@@ -1477,13 +1502,13 @@
         let allDetailsExpanded = false;
         function toggleAllDetails() {
             allDetailsExpanded = !allDetailsExpanded;
-            const panels = document.querySelectorAll('[id^="panel-ctx-"], [id^="panel-tools-"], [id^="panel-thoughts-"]');
+            const panels = document.querySelectorAll('[id^="panel-ctx-"], [id^="panel-files-"], [id^="panel-tools-"], [id^="panel-thoughts-"]');
             panels.forEach(p => {
                 if (allDetailsExpanded) p.classList.remove('hidden');
                 else p.classList.add('hidden');
             });
 
-            const carets = document.querySelectorAll('[id^="caret-ctx-"], [id^="caret-tools-"], [id^="caret-thoughts-"]');
+            const carets = document.querySelectorAll('[id^="caret-ctx-"], [id^="caret-files-"], [id^="caret-tools-"], [id^="caret-thoughts-"]');
             carets.forEach(c => {
                 if (allDetailsExpanded) c.classList.add('rotate-180');
                 else c.classList.remove('rotate-180');
@@ -1515,6 +1540,15 @@
 
         function copyTurnContext(btn, turnId) {
             const textEl = document.getElementById(`ctx-text-${turnId}`);
+            if (!textEl) return;
+            navigator.clipboard.writeText(textEl.textContent);
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-check text-green-400"></i> Copied';
+            setTimeout(() => btn.innerHTML = orig, 1500);
+        }
+
+        function copyFilesContext(btn, turnId) {
+            const textEl = document.getElementById(`files-text-${turnId}`);
             if (!textEl) return;
             navigator.clipboard.writeText(textEl.textContent);
             const orig = btn.innerHTML;
@@ -1669,12 +1703,13 @@
 
                     // --- 2. TOGGLES BELOW USER QUESTION BOX ---
                     const hasContext = Boolean(turn.systemContext);
+                    const hasFiles = Boolean(turn.filesContext);
                     const hasTools = turn.toolCalls && turn.toolCalls.length > 0;
                     const hasThoughts = !hasTools && turn.thoughts && turn.thoughts.length > 0;
 
-                    if (hasContext || hasTools || hasThoughts) {
+                    if (hasContext || hasFiles || hasTools || hasThoughts) {
                         const togglesBar = document.createElement('div');
-                        togglesBar.className = "flex flex-wrap items-center justify-end gap-2 mt-2 mb-3 px-1 no-print";
+                        togglesBar.className = "flex flex-wrap items-center justify-start gap-2 mt-2 mb-3 px-1 no-print";
 
                         if (hasContext) {
                             const ctxBtn = document.createElement('button');
@@ -1687,6 +1722,19 @@
                             `;
                             ctxBtn.onclick = () => toggleTurnPanel(turn.id, 'ctx');
                             togglesBar.appendChild(ctxBtn);
+                        }
+
+                        if (hasFiles) {
+                            const filesBtn = document.createElement('button');
+                            filesBtn.id = `btn-files-${turn.id}`;
+                            filesBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-slate-700/80 transition-all border border-slate-300/60 dark:border-slate-700/80 cursor-pointer shadow-xs";
+                            filesBtn.innerHTML = `
+                                <i class="ph ph-file-text text-indigo-500"></i>
+                                <span>Referenced Files</span>
+                                <i class="ph ph-caret-down text-[10px] transition-transform duration-200" id="caret-files-${turn.id}"></i>
+                            `;
+                            filesBtn.onclick = () => toggleTurnPanel(turn.id, 'files');
+                            togglesBar.appendChild(filesBtn);
                         }
 
                         if (hasTools) {
@@ -1755,6 +1803,34 @@
                                 <div id="ctx-text-${turn.id}" class="hidden raw-code">${escapeHtml(turn.systemContext)}</div>
                             `;
                             turnWrapper.appendChild(ctxPanel);
+                        }
+
+                        // --- 3.5 REFERENCED FILES PANEL (HIDDEN FIRST) ---
+                        if (hasFiles) {
+                            const filesPanel = document.createElement('div');
+                            filesPanel.id = `panel-files-${turn.id}`;
+                            filesPanel.className = "hidden w-full mb-4 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/70 dark:bg-slate-900/90 p-4 text-xs shadow-inner transition-all no-print";
+                            filesPanel.innerHTML = `
+                                <div class="flex items-center justify-between mb-2 pb-2 border-b border-indigo-200/70 dark:border-indigo-800/60">
+                                    <div class="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-semibold">
+                                        <i class="ph ph-file-text text-sm"></i>
+                                        <span>Referenced File Contents</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="openTurnDetailsInNewTab('${turn.id}')" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-medium">
+                                            <i class="ph ph-arrow-square-out"></i> Open in Tab
+                                        </button>
+                                        <button onclick="copyFilesContext(this, '${turn.id}')" class="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-medium ml-2">
+                                            <i class="ph ph-copy"></i> Copy
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="code-content rounded-lg border border-indigo-200/60 dark:border-slate-800 bg-white dark:bg-slate-950 max-h-72 overflow-y-auto">
+                                    ${renderCodeWithLineNumbers(turn.filesContext, 'text')}
+                                </div>
+                                <div id="files-text-${turn.id}" class="hidden raw-code">${escapeHtml(turn.filesContext)}</div>
+                            `;
+                            turnWrapper.appendChild(filesPanel);
                         }
 
                         // --- 4. TOOL RESPONSES PANEL (HIDDEN FIRST) ---
@@ -2030,6 +2106,9 @@
                     }
                     if (t.systemContext) {
                         md += `<details><summary>System Context</summary>\n\n\`\`\`\n${t.systemContext}\n\`\`\`\n</details>\n\n`;
+                    }
+                    if (t.filesContext) {
+                        md += `<details><summary>Referenced Files</summary>\n\n\`\`\`\n${t.filesContext}\n\`\`\`\n</details>\n\n`;
                     }
                     if (t.toolCalls && t.toolCalls.length) {
                         md += `<details><summary>Tool Responses (${t.toolCalls.length})</summary>\n\n`;
