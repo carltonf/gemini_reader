@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini CLI Reader V3.4</title>
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS with Typography Plugin -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -40,10 +40,163 @@
         .sidebar-collapsed { width: 0 !important; padding: 0 !important; overflow: hidden; }
         #sidebar { transition: width 0.3s ease; }
         
-        .code-block-wrapper { margin: 1em 0; border-radius: 0.5rem; overflow: hidden; border: 1px solid #334155; }
-        .code-header { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 0.5rem 1rem; color: #94a3b8; font-family: monospace; font-size: 0.8rem; border-bottom: 1px solid #334155; }
-        .code-content { margin: 0; padding: 0; }
-        .code-content pre { margin: 0; border-radius: 0; }
+        /* Typography & Headings */
+        .prose h1, .chat-content h1 {
+            font-size: 1.5rem !important;
+            font-weight: 800 !important;
+            line-height: 1.35 !important;
+            margin-top: 1.5rem !important;
+            margin-bottom: 0.75rem !important;
+            color: #0284c7 !important;
+            border-bottom: 2px solid rgba(2, 132, 199, 0.2) !important;
+            padding-bottom: 0.35rem !important;
+        }
+        .dark .prose h1, .dark .chat-content h1 {
+            color: #38bdf8 !important;
+            border-bottom-color: rgba(56, 189, 248, 0.25) !important;
+        }
+        
+        .prose h2, .chat-content h2 {
+            font-size: 1.3rem !important;
+            font-weight: 750 !important;
+            line-height: 1.35 !important;
+            margin-top: 1.35rem !important;
+            margin-bottom: 0.6rem !important;
+            color: #0369a1 !important;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.25) !important;
+            padding-bottom: 0.25rem !important;
+        }
+        .dark .prose h2, .dark .chat-content h2 {
+            color: #7dd3fc !important;
+            border-bottom-color: rgba(71, 85, 105, 0.45) !important;
+        }
+        
+        .prose h3, .chat-content h3 {
+            font-size: 1.15rem !important;
+            font-weight: 700 !important;
+            line-height: 1.4 !important;
+            margin-top: 1.25rem !important;
+            margin-bottom: 0.5rem !important;
+            color: #0f172a !important;
+        }
+        .dark .prose h3, .dark .chat-content h3 {
+            color: #f8fafc !important;
+        }
+        
+        .prose h4, .chat-content h4 {
+            font-size: 1.05rem !important;
+            font-weight: 700 !important;
+            line-height: 1.4 !important;
+            margin-top: 1rem !important;
+            margin-bottom: 0.4rem !important;
+            color: #1e293b !important;
+        }
+        .dark .prose h4, .dark .chat-content h4 {
+            color: #e2e8f0 !important;
+        }
+
+        .prose ol, .chat-content ol {
+            list-style-type: decimal !important;
+            margin: 0.85rem 0 !important;
+            padding-left: 1.75rem !important;
+        }
+        .prose ol > li, .chat-content ol > li {
+            margin-bottom: 0.5rem !important;
+            line-height: 1.65 !important;
+            padding-left: 0.25rem !important;
+        }
+        .prose ol > li::marker, .chat-content ol > li::marker {
+            font-weight: 800 !important;
+            color: #0284c7 !important;
+        }
+        .dark .prose ol > li::marker, .dark .chat-content ol > li::marker {
+            color: #38bdf8 !important;
+        }
+
+        .prose ul, .chat-content ul {
+            list-style-type: disc !important;
+            margin: 0.75rem 0 !important;
+            padding-left: 1.5rem !important;
+        }
+        .prose ul > li, .chat-content ul > li {
+            margin-bottom: 0.35rem !important;
+            line-height: 1.6 !important;
+        }
+
+        .prose p, .chat-content p {
+            margin-top: 0.5rem !important;
+            margin-bottom: 0.75rem !important;
+            line-height: 1.65 !important;
+        }
+
+        /* User Bubble text overrides */
+        .bg-blue-600 h1, .bg-blue-600 h2, .bg-blue-600 h3, .bg-blue-600 h4 {
+            color: #ffffff !important;
+            border-color: rgba(255, 255, 255, 0.25) !important;
+        }
+        .bg-blue-600 ol > li::marker {
+            color: #e0f2fe !important;
+        }
+
+        /* Code Blocks & Response Pre with Unselectable Line Numbers & Word-Wrap */
+        .code-block-wrapper {
+            margin: 1.25rem 0;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid #334155;
+            background: #0f172a;
+        }
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #090d16;
+            padding: 0.45rem 1rem;
+            color: #94a3b8;
+            font-family: ui-monospace, SFMono-Regular, monospace;
+            font-size: 0.75rem;
+            border-bottom: 1px solid #1e293b;
+        }
+        .code-content {
+            margin: 0;
+            padding: 0.75rem 0;
+            background: #0b0f19;
+            overflow-x: auto;
+        }
+        .code-line {
+            display: flex;
+            align-items: flex-start;
+            line-height: 1.55;
+            padding: 0.05rem 0.75rem 0.05rem 0;
+            transition: background 0.15s ease;
+        }
+        .code-line:hover {
+            background: rgba(255, 255, 255, 0.035);
+        }
+        .line-num {
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            color: #475569;
+            text-align: right;
+            padding-right: 1.25rem;
+            flex-shrink: 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.75rem;
+            line-height: 1.55;
+        }
+        .line-content {
+            flex: 1;
+            min-width: 0;
+            white-space: pre-wrap !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.8rem;
+            line-height: 1.55;
+            color: #e2e8f0;
+        }
         
         @media print {
             #sidebar, header, #landing-screen, .no-print { display: none !important; }
@@ -285,6 +438,54 @@
         }
         initTheme();
 
+        // --- MARKDOWN & CODE FORMATTING HELPERS ---
+        function prepareMarkdown(text) {
+            if (!text) return "";
+            // Normalize list/heading numbers lacking space, e.g. "2.BBBB" -> "2. BBBB"
+            let normalized = text.replace(/^(\s*\d+[.)])([^\s\d])/gm, '$1 $2');
+            return normalized;
+        }
+
+        function splitHighlightedLines(html) {
+            const rawLines = html.split(/\r?\n/);
+            if (rawLines.length > 1 && rawLines[rawLines.length - 1] === "") {
+                rawLines.pop();
+            }
+            const stack = [];
+            const processedLines = [];
+            for (let i = 0; i < rawLines.length; i++) {
+                let line = rawLines[i];
+                let prefix = stack.map(tag => `<span class="${tag}">`).join("");
+                const tagRegex = /<\/?span(?: class="([^"]*)")?>/g;
+                let match;
+                while ((match = tagRegex.exec(line)) !== null) {
+                    if (match[0].startsWith("</")) {
+                        stack.pop();
+                    } else {
+                        stack.push(match[1]);
+                    }
+                }
+                let suffix = stack.map(() => "</span>").join("");
+                processedLines.push(prefix + line + suffix);
+            }
+            return processedLines;
+        }
+
+        function renderCodeWithLineNumbers(code, lang = "", highlightedHtml = null) {
+            let contentHtml = highlightedHtml;
+            if (!contentHtml) {
+                contentHtml = escapeHtml(code);
+            }
+            const lines = splitHighlightedLines(contentHtml);
+            const digits = Math.max(2, String(lines.length).length);
+            const widthRem = (digits * 0.55 + 1.2).toFixed(2);
+
+            return lines.map((l, i) => {
+                const num = i + 1;
+                return `<div class="code-line"><span class="line-num" style="width:${widthRem}rem; min-width:${widthRem}rem;" aria-hidden="true">${num}</span><span class="line-content">${l || "&nbsp;"}</span></div>`;
+            }).join("");
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
             loadFavorites();
@@ -295,7 +496,7 @@
                 let code = typeof codeArg === 'object' && codeArg !== null ? codeArg.text : codeArg;
                 let language = typeof codeArg === 'object' && codeArg !== null ? codeArg.lang : langArg;
                 code = code || '';
-                let highlighted = code;
+                let highlighted = null;
                 try {
                     if (language && hljs.getLanguage(language)) {
                         highlighted = hljs.highlight(code, { language }).value;
@@ -305,14 +506,15 @@
                 } catch (e) {
                     highlighted = escapeHtml(code);
                 }
+                const linesHtml = renderCodeWithLineNumbers(code, language, highlighted);
                 return `<div class="code-block-wrapper">
                             <div class="code-header">
-                                <span>${escapeHtml(language || 'text')}</span>
-                                <button class="hover:text-white transition-colors flex items-center gap-1" onclick="copyCode(this)">
+                                <span>${escapeHtml(language || 'code')}</span>
+                                <button class="hover:text-white transition-colors flex items-center gap-1 cursor-pointer" onclick="copyCode(this)">
                                     <i class="ph ph-copy"></i> Copy
                                 </button>
                             </div>
-                            <div class="code-content"><pre><code class="hljs ${escapeHtml(language || '')}">${highlighted}</code></pre></div>
+                            <div class="code-content">${linesHtml}</div>
                             <div class="hidden raw-code">${escapeHtml(code)}</div> 
                         </div>`;
             };
@@ -1078,12 +1280,17 @@
         .tool-item:last-child { margin-bottom: 0; }
         .tool-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; font-family: monospace; font-size: 0.85rem; }
         .tool-cmd { color: var(--green); font-weight: 700; word-break: break-all; }
-        pre { background: #060913; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.8rem; line-height: 1.5; color: #cbd5e1; margin: 0; max-height: 600px; white-space: pre-wrap; word-break: break-word; }
+        .code-content { margin: 0; padding: 0.6rem 0; background: #060913; border-radius: 6px; overflow-x: auto; }
+        .code-line { display: flex; align-items: flex-start; line-height: 1.55; padding: 0.05rem 0.5rem 0.05rem 0; transition: background 0.15s; }
+        .code-line:hover { background: rgba(255, 255, 255, 0.035); }
+        .line-num { user-select: none !important; -webkit-user-select: none !important; color: #475569; text-align: right; padding-right: 1.25rem; flex-shrink: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.75rem; line-height: 1.55; }
+        .line-content { flex: 1; min-width: 0; white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.8rem; line-height: 1.55; color: #cbd5e1; }
         .btn { background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
         .btn:hover { background: #475569; color: #fff; }
         .search-bar { margin-bottom: 1.5rem; display: flex; gap: 0.5rem; }
         .search-input { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 1rem; color: #fff; font-size: 0.85rem; outline: none; }
         .search-input:focus { border-color: var(--blue); }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -1107,6 +1314,15 @@
     <script>
         function copyText(btn, text) {
             navigator.clipboard.writeText(text);
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+            setTimeout(() => btn.innerHTML = orig, 1500);
+        }
+        function copyCode(btn) {
+            const wrapper = btn.closest('.tool-item') || btn.closest('.section-box') || btn.closest('.turn-card');
+            const rawEl = wrapper ? wrapper.querySelector('.raw-code') : null;
+            const raw = rawEl ? rawEl.textContent : (btn.dataset.code || '');
+            navigator.clipboard.writeText(raw);
             const orig = btn.innerHTML;
             btn.innerHTML = '<i class="ph ph-check"></i> Copied!';
             setTimeout(() => btn.innerHTML = orig, 1500);
@@ -1144,9 +1360,12 @@
                     <div class="section-box">
                         <div class="section-title ctx-title">
                             <span><i class="ph ph-brackets-curly"></i> System & Workspace Context (${escapeHtml(chat.projectName)})</span>
-                            <button class="btn" onclick="copyText(this, document.getElementById('ctx-${turn.id}').textContent)"><i class="ph ph-copy"></i> Copy</button>
+                            <button class="btn" onclick="copyCode(this)"><i class="ph ph-copy"></i> Copy</button>
                         </div>
-                        <pre id="ctx-${turn.id}">${escapeHtml(turn.systemContext)}</pre>
+                        <div class="code-content max-h-96 border border-slate-700">
+                            ${renderCodeWithLineNumbers(turn.systemContext, 'text')}
+                        </div>
+                        <div class="hidden raw-code">${escapeHtml(turn.systemContext)}</div>
                     </div>
                 `;
             }
@@ -1197,10 +1416,13 @@
                                             <span class="tool-cmd" style="${isError ? 'color:#f87171;' : ''}">${escapeHtml(cmdHeader)}</span>
                                             <div style="display:flex; gap:0.5rem; align-items:center;">
                                                 <span style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:#1e293b; color:#94a3b8;">${escapeHtml(c.name)}</span>
-                                                <button class="btn" onclick="copyText(this, document.getElementById('out-${turn.id}-${idx}').textContent)"><i class="ph ph-copy"></i> Copy</button>
+                                                <button class="btn" onclick="copyCode(this)"><i class="ph ph-copy"></i> Copy</button>
                                             </div>
                                         </div>
-                                        <pre id="out-${turn.id}-${idx}" style="${isError ? 'color:#fca5a5; border-color:#7f1d1d;' : ''}">${escapeHtml(outputStr)}</pre>
+                                        <div class="code-content max-h-80 border ${isError ? 'border-red-900/60' : 'border-slate-800'}">
+                                            ${renderCodeWithLineNumbers(outputStr, 'text')}
+                                        </div>
+                                        <div class="hidden raw-code">${escapeHtml(outputStr)}</div>
                                     </div>
                                 `;
                             }).join('')}
@@ -1326,12 +1548,18 @@
                 }
 
                 return `
-                    <div class="p-3 rounded-lg bg-slate-950 border ${isError ? 'border-red-900/60' : 'border-slate-800'}">
+                    <div class="p-3 rounded-lg bg-slate-950 border ${isError ? 'border-red-900/60' : 'border-slate-800'} tool-item">
                         <div class="flex items-center justify-between mb-1.5 gap-2">
                             <span class="font-mono font-bold text-xs ${isError ? 'text-red-400' : 'text-emerald-300'} truncate">${escapeHtml(cmdHeader)}</span>
-                            <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${isError ? 'bg-red-900/60 text-red-200' : 'bg-slate-800 text-slate-400'} shrink-0">${escapeHtml(c.name)}</span>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${isError ? 'bg-red-900/60 text-red-200' : 'bg-slate-800 text-slate-400'}">${escapeHtml(c.name)}</span>
+                                <button class="hover:text-white text-slate-400 text-xs flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/80 cursor-pointer" onclick="copyCode(this)" title="Copy output"><i class="ph ph-copy"></i> Copy</button>
+                            </div>
                         </div>
-                        <pre class="p-2.5 bg-black/60 rounded text-[11px] font-mono whitespace-pre-wrap max-h-52 overflow-y-auto ${isError ? 'text-red-300' : 'text-slate-300'} border border-slate-900/80 leading-relaxed">${escapeHtml(outputStr)}</pre>
+                        <div class="code-content rounded-md border ${isError ? 'border-red-900/60' : 'border-slate-900/80'} bg-black/60 max-h-56 overflow-y-auto">
+                            ${renderCodeWithLineNumbers(outputStr, 'text')}
+                        </div>
+                        <div class="hidden raw-code">${escapeHtml(outputStr)}</div>
                     </div>
                 `;
             }).join('');
@@ -1394,11 +1622,11 @@
                     const contentDiv = document.createElement('div');
                     contentDiv.className = "prose prose-invert max-w-none text-sm break-words";
                     if (turn.cleanPrompt) {
-                        contentDiv.innerHTML = marked.parse(turn.cleanPrompt);
+                        contentDiv.innerHTML = marked.parse(prepareMarkdown(turn.cleanPrompt));
                     } else if (turn.systemContext) {
                         contentDiv.innerHTML = '<span class="italic text-xs text-blue-200 opacity-90 flex items-center gap-1.5"><i class="ph ph-sparkle"></i> Session initialized with environment context</span>';
                     } else {
-                        contentDiv.innerHTML = marked.parse(turn.rawText || "");
+                        contentDiv.innerHTML = marked.parse(prepareMarkdown(turn.rawText || ""));
                     }
                     bubble.appendChild(contentDiv);
 
@@ -1521,7 +1749,10 @@
                                         </button>
                                     </div>
                                 </div>
-                                <pre id="ctx-text-${turn.id}" class="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-200 max-h-72 p-3 bg-white dark:bg-slate-950 rounded-lg border border-blue-200/60 dark:border-slate-800">${escapeHtml(turn.systemContext)}</pre>
+                                <div class="code-content rounded-lg border border-blue-200/60 dark:border-slate-800 bg-white dark:bg-slate-950 max-h-72 overflow-y-auto">
+                                    ${renderCodeWithLineNumbers(turn.systemContext, 'text')}
+                                </div>
+                                <div id="ctx-text-${turn.id}" class="hidden raw-code">${escapeHtml(turn.systemContext)}</div>
                             `;
                             turnWrapper.appendChild(ctxPanel);
                         }
@@ -1628,7 +1859,7 @@
                         const contentDiv = document.createElement('div');
                         contentDiv.className = "prose dark:prose-invert max-w-none text-sm break-words";
                         const answerText = extractConversationalText(m.content) || extractMessageText(m.content);
-                        contentDiv.innerHTML = marked.parse(answerText || "");
+                        contentDiv.innerHTML = marked.parse(prepareMarkdown(answerText || ""));
                         bubble.appendChild(contentDiv);
 
                         // Assistant Footer
@@ -1728,11 +1959,12 @@
         }
 
         function copyCode(btn) {
-            const wrapper = btn.closest('.code-block-wrapper');
-            const raw = wrapper.querySelector('.raw-code').textContent;
+            const wrapper = btn.closest('.code-block-wrapper') || btn.closest('.tool-item') || btn.closest('.section-box') || btn.parentElement;
+            const rawEl = wrapper ? wrapper.querySelector('.raw-code') : null;
+            const raw = rawEl ? rawEl.textContent : (btn.dataset.code || "");
             navigator.clipboard.writeText(raw);
             const original = btn.innerHTML;
-            btn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+            btn.innerHTML = '<i class="ph ph-check text-green-400"></i> Copied!';
             setTimeout(() => btn.innerHTML = original, 2000);
         }
 
