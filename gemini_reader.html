@@ -191,9 +191,14 @@
                             <i class="ph ph-sliders text-sm text-blue-500"></i>
                             <span id="toggle-all-text">Show Details</span>
                         </button>
+                        <button onclick="openAllDetailsInNewTab()" id="open-all-tab-btn" class="hidden sm:inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium cursor-pointer transition-colors" title="Open all Context & Tool Responses in a separate tab">
+                            <i class="ph ph-arrow-square-out text-sm text-emerald-500"></i>
+                            <span>Open in Tab</span>
+                        </button>
                         <div class="relative group">
-                            <button class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="ph ph-export"></i></button>
-                            <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 hidden group-hover:block z-50">
+                            <button class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Export options"><i class="ph ph-export"></i></button>
+                            <div class="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 hidden group-hover:block z-50">
+                                <button onclick="openAllDetailsInNewTab()" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-arrow-square-out mr-2 text-emerald-500"></i> Context & Tools in Tab</button>
                                 <button onclick="exportChat('md')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-file-text mr-2"></i> Markdown (.md)</button>
                                 <button onclick="exportChat('html')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-browsers mr-2"></i> Portable HTML</button>
                                 <button onclick="window.print()" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-200"><i class="ph ph-printer mr-2"></i> Print / PDF</button>
@@ -685,7 +690,22 @@
             return "";
         }
 
-        function extractMessageText(content, options = { includeToolResponses: false }) {
+        function extractConversationalText(content) {
+            if (!content) return "";
+            if (typeof content === "string") return content.trim();
+            if (Array.isArray(content)) {
+                return content.map(part => {
+                    if (!part) return "";
+                    if (typeof part === "string") return part;
+                    if (part.text) return part.text;
+                    return "";
+                }).filter(Boolean).join("\n").trim();
+            }
+            if (typeof content === "object" && content.text) return String(content.text).trim();
+            return "";
+        }
+
+        function extractMessageText(content, options = {}) {
             if (!content) return "";
             if (typeof content === "string") return content;
             if (Array.isArray(content)) {
@@ -693,7 +713,7 @@
                     if (!part) return "";
                     if (typeof part === "string") return part;
                     if (part.text) return part.text;
-                    if (part.functionCall) {
+                    if (part.functionCall && options.includeToolCalls) {
                         return `[Tool Call: ${part.functionCall.name}]`;
                     }
                     if (part.functionResponse) {
@@ -753,7 +773,7 @@
         }
 
         function buildSearchText(messages, summary, project) {
-            const msgParts = messages.map(m => extractMessageText(m.content, { includeToolResponses: true }));
+            const msgParts = messages.map(m => extractMessageText(m.content, { includeToolCalls: true, includeToolResponses: true }));
             return (msgParts.join(' ') + ' ' + (summary || '') + ' ' + (project || '')).toLowerCase();
         }
 
@@ -896,12 +916,24 @@
             const turns = [];
             let currentTurn = null;
 
+            // Index all function responses across the conversation by ID
+            const functionResponsesMap = new Map();
+            for (const msg of messages) {
+                if (Array.isArray(msg.content)) {
+                    for (const p of msg.content) {
+                        if (p && p.functionResponse && p.functionResponse.id) {
+                            functionResponsesMap.set(p.functionResponse.id, p.functionResponse);
+                        }
+                    }
+                }
+            }
+
             for (let i = 0; i < messages.length; i++) {
                 const msg = messages[i];
                 if (isPureToolResponse(msg)) continue;
 
                 if (msg.type === 'user') {
-                    const rawText = extractMessageText(msg.content);
+                    const rawText = extractConversationalText(msg.content) || extractMessageText(msg.content);
                     currentTurn = {
                         id: msg.id || ('turn-' + turns.length),
                         userMsg: msg,
@@ -952,13 +984,45 @@
                 }
 
                 if (msg.type === 'gemini') {
+                    // 1. Tool calls directly attached to message
                     if (msg.toolCalls && msg.toolCalls.length > 0) {
-                        currentTurn.toolCalls.push(...msg.toolCalls);
+                        for (const tc of msg.toolCalls) {
+                            if ((!tc.result || tc.result.length === 0) && tc.id && functionResponsesMap.has(tc.id)) {
+                                tc.result = [{ functionResponse: functionResponsesMap.get(tc.id) }];
+                            }
+                            if (!currentTurn.toolCalls.some(existing => existing.id === tc.id)) {
+                                currentTurn.toolCalls.push(tc);
+                            }
+                        }
                     }
+
+                    // 2. Tool calls embedded inside msg.content as functionCall parts
+                    if (Array.isArray(msg.content)) {
+                        for (const p of msg.content) {
+                            if (p && p.functionCall) {
+                                const fc = p.functionCall;
+                                const existing = currentTurn.toolCalls.find(tc => tc.id === fc.id);
+                                if (!existing) {
+                                    const matchedResp = fc.id && functionResponsesMap.has(fc.id) ? 
+                                        [{ functionResponse: functionResponsesMap.get(fc.id) }] : [];
+                                    currentTurn.toolCalls.push({
+                                        id: fc.id || ('call-' + currentTurn.toolCalls.length),
+                                        name: fc.name,
+                                        args: fc.args || {},
+                                        result: matchedResp
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Thoughts
                     if (msg.thoughts && msg.thoughts.length > 0) {
                         currentTurn.thoughts.push(...msg.thoughts);
                     }
-                    const text = extractMessageText(msg.content).trim();
+
+                    // 4. Conversational Text ONLY (stray [Tool Call: ...] boxes eliminated)
+                    const text = extractConversationalText(msg.content);
                     if (text) {
                         currentTurn.assistantMsgs.push(msg);
                     }
@@ -966,6 +1030,225 @@
             }
 
             return turns;
+        }
+
+        // --- STANDALONE DETAILS TAB VIEWER ---
+        function generateDetailsTabHtml(title, subtitle, turnSections) {
+            return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(title)}</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"><\/script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --panel-sub: #0b0f19;
+            --border: #334155;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --blue: #38bdf8;
+            --green: #34d399;
+            --purple: #c084fc;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 2rem 1.5rem;
+            line-height: 1.6;
+        }
+        .container { max-width: 1080px; margin: 0 auto; }
+        header { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+        h1 { font-size: 1.4rem; margin: 0 0 0.5rem 0; color: var(--blue); }
+        .meta { font-size: 0.85rem; color: var(--muted); display: flex; gap: 1.25rem; flex-wrap: wrap; }
+        .turn-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 2.5rem; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }
+        .turn-header { padding: 1rem 1.25rem; background: rgba(30, 41, 59, 0.95); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .turn-prompt { font-weight: 600; font-size: 0.95rem; color: #fff; }
+        .section-box { padding: 1.25rem; border-bottom: 1px solid var(--border); }
+        .section-box:last-child { border-bottom: none; }
+        .section-title { font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .ctx-title { color: #60a5fa; }
+        .tools-title { color: var(--green); }
+        .thoughts-title { color: var(--purple); }
+        .tool-item { background: var(--panel-sub); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .tool-item:last-child { margin-bottom: 0; }
+        .tool-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; font-family: monospace; font-size: 0.85rem; }
+        .tool-cmd { color: var(--green); font-weight: 700; word-break: break-all; }
+        pre { background: #060913; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.8rem; line-height: 1.5; color: #cbd5e1; margin: 0; max-height: 600px; white-space: pre-wrap; word-break: break-word; }
+        .btn { background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+        .btn:hover { background: #475569; color: #fff; }
+        .search-bar { margin-bottom: 1.5rem; display: flex; gap: 0.5rem; }
+        .search-input { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 1rem; color: #fff; font-size: 0.85rem; outline: none; }
+        .search-input:focus { border-color: var(--blue); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1><i class="ph ph-terminal-window"></i> ${escapeHtml(title)}</h1>
+                <div class="meta">${subtitle}</div>
+            </div>
+            <div>
+                <button onclick="window.print()" class="btn"><i class="ph ph-printer"></i> Print</button>
+            </div>
+        </header>
+        <div class="search-bar">
+            <input type="text" id="quick-filter" placeholder="Quick filter tools or outputs..." class="search-input" oninput="filterDetails(this.value)">
+        </div>
+        <main id="details-main">
+            ${turnSections}
+        </main>
+    </div>
+    <script>
+        function copyText(btn, text) {
+            navigator.clipboard.writeText(text);
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+            setTimeout(() => btn.innerHTML = orig, 1500);
+        }
+        function filterDetails(q) {
+            const query = q.toLowerCase();
+            document.querySelectorAll('.tool-item, .turn-card').forEach(el => {
+                if (!query) { el.style.display = ''; return; }
+                const txt = el.innerText.toLowerCase();
+                el.style.display = txt.includes(query) ? '' : 'none';
+            });
+        }
+    <\/script>
+</body>
+</html>`;
+        }
+
+        function renderTurnDetailSection(turn, chat) {
+            const hasContext = Boolean(turn.systemContext);
+            const hasTools = turn.toolCalls && turn.toolCalls.length > 0;
+            const hasThoughts = turn.thoughts && turn.thoughts.length > 0;
+
+            if (!hasContext && !hasTools && !hasThoughts) return '';
+
+            let html = `
+                <div class="turn-card" id="turn-detail-${turn.id}">
+                    <div class="turn-header">
+                        <div class="turn-prompt"><i class="ph ph-chat-circle-dots text-blue-400 mr-1.5"></i> ${escapeHtml(turn.cleanPrompt || 'Session initialized with environment context')}</div>
+                        <span class="text-xs text-slate-400 font-mono">${turn.toolCalls.length} tools</span>
+                    </div>
+            `;
+
+            if (hasContext) {
+                html += `
+                    <div class="section-box">
+                        <div class="section-title ctx-title">
+                            <span><i class="ph ph-brackets-curly"></i> System & Workspace Context (${escapeHtml(chat.projectName)})</span>
+                            <button class="btn" onclick="copyText(this, document.getElementById('ctx-${turn.id}').textContent)"><i class="ph ph-copy"></i> Copy</button>
+                        </div>
+                        <pre id="ctx-${turn.id}">${escapeHtml(turn.systemContext)}</pre>
+                    </div>
+                `;
+            }
+
+            if (hasThoughts) {
+                html += `
+                    <div class="section-box">
+                        <div class="section-title thoughts-title">
+                            <span><i class="ph ph-brain"></i> Agent Reasoning Thoughts (${turn.thoughts.length})</span>
+                        </div>
+                        <div class="space-y-2">
+                            ${turn.thoughts.map((th, i) => `
+                                <div style="background:#0b0f19; border:1px solid #1e293b; border-radius:6px; padding:0.75rem; margin-bottom:0.5rem;">
+                                    <div style="font-weight:700; color:#c084fc; font-size:0.8rem; margin-bottom:0.25rem;">${i+1}. ${escapeHtml(th.subject || 'Thought')}</div>
+                                    <div style="font-size:0.8rem; color:#cbd5e1; white-space:pre-wrap;">${escapeHtml(th.description || '')}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (hasTools) {
+                html += `
+                    <div class="section-box">
+                        <div class="section-title tools-title">
+                            <span><i class="ph ph-terminal"></i> Tool Calls & Execution Responses (${turn.toolCalls.length})</span>
+                        </div>
+                        <div>
+                            ${turn.toolCalls.map((c, idx) => {
+                                const resp = c.result?.[0]?.functionResponse?.response || {};
+                                const output = resp.output || resp.error || (typeof c.result === 'string' ? c.result : "") || "(No output)";
+                                const outputStr = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+                                const isError = Boolean(resp.error || c.status === 'error');
+
+                                let cmdHeader = `$ ${c.name}`;
+                                if (c.args) {
+                                    if (c.args.command) cmdHeader = `$ ${c.args.command}`;
+                                    else if (c.args.file_path) cmdHeader = `${c.name}: ${c.args.file_path}`;
+                                    else if (c.args.pattern) cmdHeader = `${c.name}: "${c.args.pattern}"`;
+                                    else if (c.args.query) cmdHeader = `${c.name}: "${c.args.query}"`;
+                                    else if (Object.keys(c.args).length > 0) cmdHeader = `${c.name}(${Object.keys(c.args).join(', ')})`;
+                                }
+
+                                return `
+                                    <div class="tool-item">
+                                        <div class="tool-head">
+                                            <span class="tool-cmd" style="${isError ? 'color:#f87171;' : ''}">${escapeHtml(cmdHeader)}</span>
+                                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                                <span style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:#1e293b; color:#94a3b8;">${escapeHtml(c.name)}</span>
+                                                <button class="btn" onclick="copyText(this, document.getElementById('out-${turn.id}-${idx}').textContent)"><i class="ph ph-copy"></i> Copy</button>
+                                            </div>
+                                        </div>
+                                        <pre id="out-${turn.id}-${idx}" style="${isError ? 'color:#fca5a5; border-color:#7f1d1d;' : ''}">${escapeHtml(outputStr)}</pre>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        function openTurnDetailsInNewTab(turnId) {
+            const chat = allChats.find(c => c.id === currentChatId);
+            if (!chat) return;
+            const turns = buildConversationTurns(chat.messages);
+            const turn = turns.find(t => t.id === turnId);
+            if (!turn) return;
+
+            const chatTitle = getChatTitle(chat);
+            const title = `Context & Tools: ${turn.cleanPrompt ? turn.cleanPrompt.slice(0, 50) : 'Session Turn'}`;
+            const subtitle = `<span><b>Project:</b> ${escapeHtml(chat.projectName)}</span> <span><b>Date:</b> ${chat.date.toLocaleString()}</span> <span><b>Session:</b> ${chat.id.slice(0, 8)}</span>`;
+
+            const turnHtml = renderTurnDetailSection(turn, chat);
+            const pageHtml = generateDetailsTabHtml(title, subtitle, turnHtml || '<div class="turn-card p-6 text-center text-slate-400">No context or tool activity in this turn.</div>');
+
+            const blob = new Blob([pageHtml], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        }
+
+        function openAllDetailsInNewTab() {
+            const chat = allChats.find(c => c.id === currentChatId);
+            if (!chat) return;
+            const turns = buildConversationTurns(chat.messages);
+            const chatTitle = getChatTitle(chat);
+            const title = `All Context & Tool Responses: ${chatTitle}`;
+            const subtitle = `<span><b>Project:</b> ${escapeHtml(chat.projectName)}</span> <span><b>Date:</b> ${chat.date.toLocaleString()}</span> <span><b>Total Turns:</b> ${turns.length}</span>`;
+
+            let allHtml = turns.map(t => renderTurnDetailSection(t, chat)).join('');
+            if (!allHtml.trim()) {
+                allHtml = '<div class="turn-card p-6 text-center text-slate-400">No context or tool activity recorded in this conversation.</div>';
+            }
+            const pageHtml = generateDetailsTabHtml(title, subtitle, allHtml);
+
+            const blob = new Blob([pageHtml], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
         }
 
         // --- TOGGLE PANELS & ACTIONS ---
@@ -1204,6 +1487,17 @@
                             togglesBar.appendChild(thBtn);
                         }
 
+                        // Open in Tab Button
+                        const tabBtn = document.createElement('button');
+                        tabBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-slate-700/80 transition-all border border-slate-300/60 dark:border-slate-700/80 cursor-pointer shadow-xs";
+                        tabBtn.title = "Open this turn's Context & Tool Responses in a separate tab";
+                        tabBtn.innerHTML = `
+                            <i class="ph ph-arrow-square-out text-emerald-500"></i>
+                            <span>Open in Tab</span>
+                        `;
+                        tabBtn.onclick = () => openTurnDetailsInNewTab(turn.id);
+                        togglesBar.appendChild(tabBtn);
+
                         turnWrapper.appendChild(togglesBar);
 
                         // --- 3. SYSTEM CONTEXT PANEL (HIDDEN FIRST) ---
@@ -1218,9 +1512,14 @@
                                         <span>System & Workspace Context</span>
                                         <span class="text-[10px] font-normal px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">${escapeHtml(chat.projectName || 'Environment')}</span>
                                     </div>
-                                    <button onclick="copyTurnContext(this, '${turn.id}')" class="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-medium">
-                                        <i class="ph ph-copy"></i> Copy
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="openTurnDetailsInNewTab('${turn.id}')" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-medium">
+                                            <i class="ph ph-arrow-square-out"></i> Open in Tab
+                                        </button>
+                                        <button onclick="copyTurnContext(this, '${turn.id}')" class="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-medium ml-2">
+                                            <i class="ph ph-copy"></i> Copy
+                                        </button>
+                                    </div>
                                 </div>
                                 <pre id="ctx-text-${turn.id}" class="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-200 max-h-72 p-3 bg-white dark:bg-slate-950 rounded-lg border border-blue-200/60 dark:border-slate-800">${escapeHtml(turn.systemContext)}</pre>
                             `;
@@ -1259,9 +1558,14 @@
                                         <span class="font-bold text-emerald-300">Tool Calls & Execution Responses</span>
                                         <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">${turn.toolCalls.length} executed</span>
                                     </div>
-                                    <button onclick="copyToolActivity(this, '${turn.id}')" class="text-slate-400 hover:text-white flex items-center gap-1 text-[11px] cursor-pointer font-medium">
-                                        <i class="ph ph-copy"></i> Copy Output
-                                    </button>
+                                    <div class="flex items-center gap-3">
+                                        <button onclick="openTurnDetailsInNewTab('${turn.id}')" class="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 text-[11px] cursor-pointer font-medium">
+                                            <i class="ph ph-arrow-square-out"></i> Open in Tab
+                                        </button>
+                                        <button onclick="copyToolActivity(this, '${turn.id}')" class="text-slate-400 hover:text-white flex items-center gap-1 text-[11px] cursor-pointer font-medium">
+                                            <i class="ph ph-copy"></i> Copy Output
+                                        </button>
+                                    </div>
                                 </div>
                                 ${thoughtsHtml}
                                 <div id="tool-output-list-${turn.id}" class="space-y-3 max-h-96 overflow-y-auto pr-1">
@@ -1281,6 +1585,9 @@
                                     <span class="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5 text-xs">
                                         <i class="ph ph-brain"></i> Agent Reasoning Steps (${turn.thoughts.length})
                                     </span>
+                                    <button onclick="openTurnDetailsInNewTab('${turn.id}')" class="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-medium text-xs">
+                                        <i class="ph ph-arrow-square-out"></i> Open in Tab
+                                    </button>
                                 </div>
                                 <div class="space-y-2 p-2 bg-white/70 dark:bg-slate-950/70 rounded-lg border border-purple-100 dark:border-slate-800">
                                     ${turn.thoughts.map((th, idx) => `
@@ -1320,7 +1627,7 @@
 
                         const contentDiv = document.createElement('div');
                         contentDiv.className = "prose dark:prose-invert max-w-none text-sm break-words";
-                        const answerText = extractMessageText(m.content);
+                        const answerText = extractConversationalText(m.content) || extractMessageText(m.content);
                         contentDiv.innerHTML = marked.parse(answerText || "");
                         bubble.appendChild(contentDiv);
 
