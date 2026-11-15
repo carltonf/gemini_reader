@@ -187,6 +187,10 @@
                             <span class="text-xs font-mono w-8 text-center" id="zoom-level">100%</span>
                             <button onclick="adjustZoom(0.1)" class="hover:text-blue-500 dark:text-slate-400"><i class="ph ph-plus"></i></button>
                         </div>
+                        <button onclick="toggleAllDetails()" id="toggle-all-details-btn" class="hidden sm:inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium cursor-pointer transition-colors" title="Expand or collapse all Tool Responses & System Context">
+                            <i class="ph ph-sliders text-sm text-blue-500"></i>
+                            <span id="toggle-all-text">Show Details</span>
+                        </button>
                         <div class="relative group">
                             <button class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"><i class="ph ph-export"></i></button>
                             <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 hidden group-hover:block z-50">
@@ -887,6 +891,169 @@
             });
         }
 
+        // --- CONVERSATION TURNS BUILDER ---
+        function buildConversationTurns(messages) {
+            const turns = [];
+            let currentTurn = null;
+
+            for (let i = 0; i < messages.length; i++) {
+                const msg = messages[i];
+                if (isPureToolResponse(msg)) continue;
+
+                if (msg.type === 'user') {
+                    const rawText = extractMessageText(msg.content);
+                    currentTurn = {
+                        id: msg.id || ('turn-' + turns.length),
+                        userMsg: msg,
+                        systemContext: extractSessionContext(rawText),
+                        cleanPrompt: cleanSessionContext(rawText),
+                        rawText: rawText,
+                        toolCalls: [],
+                        thoughts: [],
+                        assistantMsgs: [],
+                        errorMsgs: [],
+                        infoMsgs: [],
+                        cancelled: false
+                    };
+                    turns.push(currentTurn);
+                    continue;
+                }
+
+                if (!currentTurn) {
+                    currentTurn = {
+                        id: 'init-turn',
+                        userMsg: null,
+                        systemContext: null,
+                        cleanPrompt: '',
+                        rawText: '',
+                        toolCalls: [],
+                        thoughts: [],
+                        assistantMsgs: [],
+                        errorMsgs: [],
+                        infoMsgs: [],
+                        cancelled: false
+                    };
+                    turns.push(currentTurn);
+                }
+
+                if (msg.type === 'info') {
+                    const infoText = extractMessageText(msg.content);
+                    if (infoText && infoText.toLowerCase().includes('cancelled')) {
+                        currentTurn.cancelled = true;
+                    } else {
+                        currentTurn.infoMsgs.push(msg);
+                    }
+                    continue;
+                }
+
+                if (msg.type === 'error') {
+                    currentTurn.errorMsgs.push(msg);
+                    continue;
+                }
+
+                if (msg.type === 'gemini') {
+                    if (msg.toolCalls && msg.toolCalls.length > 0) {
+                        currentTurn.toolCalls.push(...msg.toolCalls);
+                    }
+                    if (msg.thoughts && msg.thoughts.length > 0) {
+                        currentTurn.thoughts.push(...msg.thoughts);
+                    }
+                    const text = extractMessageText(msg.content).trim();
+                    if (text) {
+                        currentTurn.assistantMsgs.push(msg);
+                    }
+                }
+            }
+
+            return turns;
+        }
+
+        // --- TOGGLE PANELS & ACTIONS ---
+        let allDetailsExpanded = false;
+        function toggleAllDetails() {
+            allDetailsExpanded = !allDetailsExpanded;
+            const panels = document.querySelectorAll('[id^="panel-ctx-"], [id^="panel-tools-"], [id^="panel-thoughts-"]');
+            panels.forEach(p => {
+                if (allDetailsExpanded) p.classList.remove('hidden');
+                else p.classList.add('hidden');
+            });
+
+            const carets = document.querySelectorAll('[id^="caret-ctx-"], [id^="caret-tools-"], [id^="caret-thoughts-"]');
+            carets.forEach(c => {
+                if (allDetailsExpanded) c.classList.add('rotate-180');
+                else c.classList.remove('rotate-180');
+            });
+
+            const textEl = document.getElementById('toggle-all-text');
+            if (textEl) {
+                textEl.textContent = allDetailsExpanded ? 'Hide Details' : 'Show Details';
+            }
+        }
+
+        function toggleTurnPanel(turnId, type) {
+            const panel = document.getElementById(`panel-${type}-${turnId}`);
+            const caret = document.getElementById(`caret-${type}-${turnId}`);
+            const btn = document.getElementById(`btn-${type}-${turnId}`);
+            if (!panel) return;
+
+            const isHidden = panel.classList.contains('hidden');
+            if (isHidden) {
+                panel.classList.remove('hidden');
+                if (caret) caret.classList.add('rotate-180');
+                if (btn) btn.classList.add('ring-2', 'ring-blue-500/50', 'dark:ring-blue-400/50');
+            } else {
+                panel.classList.add('hidden');
+                if (caret) caret.classList.remove('rotate-180');
+                if (btn) btn.classList.remove('ring-2', 'ring-blue-500/50', 'dark:ring-blue-400/50');
+            }
+        }
+
+        function copyTurnContext(btn, turnId) {
+            const textEl = document.getElementById(`ctx-text-${turnId}`);
+            if (!textEl) return;
+            navigator.clipboard.writeText(textEl.textContent);
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-check text-green-400"></i> Copied';
+            setTimeout(() => btn.innerHTML = orig, 1500);
+        }
+
+        function copyToolActivity(btn, turnId) {
+            const toolContainer = document.getElementById(`tool-output-list-${turnId}`);
+            if (!toolContainer) return;
+            navigator.clipboard.writeText(toolContainer.innerText);
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-check text-green-400"></i> Copied';
+            setTimeout(() => btn.innerHTML = orig, 1500);
+        }
+
+        function renderToolCallsList(toolCalls) {
+            return toolCalls.map((c, idx) => {
+                const resp = c.result?.[0]?.functionResponse?.response || {};
+                const output = resp.output || resp.error || (typeof c.result === 'string' ? c.result : "") || "(No output)";
+                const outputStr = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+                const isError = Boolean(resp.error || c.status === 'error');
+
+                let cmdHeader = `$ ${c.name}`;
+                if (c.args) {
+                    if (c.args.command) cmdHeader = `$ ${c.args.command}`;
+                    else if (c.args.file_path) cmdHeader = `${c.name}: ${c.args.file_path}`;
+                    else if (c.args.pattern) cmdHeader = `${c.name}: "${c.args.pattern}"`;
+                    else if (c.args.query) cmdHeader = `${c.name}: "${c.args.query}"`;
+                    else if (Object.keys(c.args).length > 0) cmdHeader = `${c.name}(${Object.keys(c.args).join(', ')})`;
+                }
+
+                return `
+                    <div class="p-3 rounded-lg bg-slate-950 border ${isError ? 'border-red-900/60' : 'border-slate-800'}">
+                        <div class="flex items-center justify-between mb-1.5 gap-2">
+                            <span class="font-mono font-bold text-xs ${isError ? 'text-red-400' : 'text-emerald-300'} truncate">${escapeHtml(cmdHeader)}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${isError ? 'bg-red-900/60 text-red-200' : 'bg-slate-800 text-slate-400'} shrink-0">${escapeHtml(c.name)}</span>
+                        </div>
+                        <pre class="p-2.5 bg-black/60 rounded text-[11px] font-mono whitespace-pre-wrap max-h-52 overflow-y-auto ${isError ? 'text-red-300' : 'text-slate-300'} border border-slate-900/80 leading-relaxed">${escapeHtml(outputStr)}</pre>
+                    </div>
+                `;
+            }).join('');
+        }
+
         // --- RENDER ACTIVE CHAT ---
         function loadChat(chatId, updateHistory = true) {
             currentChatId = chatId;
@@ -901,7 +1068,8 @@
 
             const projBtn = document.getElementById('project-hash');
             projBtn.textContent = chat.projectName || (chat.projectHash ? chat.projectHash.substring(0, 8) : "N/A");
-            projBtn.dataset.project = chat.projectName || chat.projectHash || "";
+            projBtn.setAttribute('data-project', chat.projectName || chat.projectHash || "");
+            if (projBtn.dataset) projBtn.dataset.project = chat.projectName || chat.projectHash || "";
             projBtn.classList.remove('hidden');
 
             const favBtn = document.getElementById('fav-btn');
@@ -920,202 +1088,326 @@
             const container = document.getElementById('messages-container');
             container.innerHTML = '';
 
-            // Filter out pure function response messages (tool execution returns already bound to Gemini toolCalls)
-            const displayMsgs = [];
-            for (let i = 0; i < chat.messages.length; i++) {
-                const msg = chat.messages[i];
-                if (isPureToolResponse(msg)) continue;
+            const turns = buildConversationTurns(chat.messages);
 
-                if (msg.type === 'info' && typeof msg.content === 'string' && msg.content.toLowerCase().includes('cancelled')) {
-                    if (i + 1 < chat.messages.length) chat.messages[i + 1]._cancelledBefore = true;
-                    else if (displayMsgs.length > 0) displayMsgs[displayMsgs.length - 1]._cancelledAfter = true;
-                } else {
-                    displayMsgs.push(msg);
-                }
-            }
-
-            if (displayMsgs.length === 0) {
+            if (turns.length === 0) {
                 container.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-400"><p>This session is empty.</p></div>';
                 return;
             }
 
-            displayMsgs.forEach(msg => {
-                if (msg.type === 'info' && !msg._cancelledAfter) {
-                    // Render subtle info badge (e.g. topic update)
-                    const infoText = extractMessageText(msg.content);
-                    if (infoText) {
-                        const infoWrap = document.createElement('div');
-                        infoWrap.className = "flex justify-center my-3 no-print";
-                        infoWrap.innerHTML = `<span class="px-3 py-1 rounded-full text-xs bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><i class="ph ph-info"></i> ${escapeHtml(infoText)}</span>`;
-                        container.appendChild(infoWrap);
-                    }
-                    return;
-                }
+            turns.forEach(turn => {
+                const turnWrapper = document.createElement('div');
+                turnWrapper.className = "conversation-turn mb-8";
+                turnWrapper.id = `turn-${turn.id}`;
 
-                const isUser = msg.type === 'user';
-                const isError = msg.type === 'error';
+                // --- 1. USER QUESTION BOX ---
+                if (turn.userMsg) {
+                    const userBoxWrap = document.createElement('div');
+                    userBoxWrap.className = "flex w-full justify-end";
 
-                const wrapper = document.createElement('div');
-                wrapper.className = `flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`;
+                    const bubble = document.createElement('div');
+                    bubble.className = "chat-content max-w-[95%] md:max-w-[85%] rounded-2xl px-5 py-4 shadow-sm leading-relaxed overflow-hidden relative group transition-all bg-blue-600 text-white rounded-tr-none prose-headings:text-white prose-a:text-blue-100 prose-code:text-blue-100 prose-strong:text-white";
 
-                const bubble = document.createElement('div');
-                const baseClasses = "chat-content max-w-[95%] md:max-w-[85%] rounded-2xl px-5 py-4 shadow-sm leading-relaxed overflow-hidden relative group transition-all";
-                let colorClasses = "bg-white dark:bg-darkpanel text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none";
-
-                if (isUser) {
-                    colorClasses = "bg-blue-600 text-white rounded-tr-none prose-headings:text-white prose-a:text-blue-100 prose-code:text-blue-100 prose-strong:text-white";
-                } else if (isError) {
-                    colorClasses = "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-tl-none";
-                }
-
-                bubble.className = `${baseClasses} ${colorClasses}`;
-
-                if (msg._cancelledBefore) {
-                    bubble.classList.add('ring-2', 'ring-orange-400', 'ring-offset-2', 'dark:ring-offset-darkbg');
-                    bubble.innerHTML += `<div class="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 text-xs px-2 py-1 mb-2 rounded flex items-center gap-1 font-bold"><i class="ph ph-warning"></i> Generation Cancelled</div>`;
-                }
-
-                // Thoughts Collapsible
-                if (msg.thoughts && msg.thoughts.length) {
-                    const details = document.createElement('details');
-                    details.className = "mb-3 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-900/50 no-print";
-                    details.innerHTML = `
-                        <summary class="p-2 text-xs font-bold text-slate-500 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800">
-                            <i class="ph ph-brain text-purple-500 text-sm"></i> Thought (${msg.thoughts.length} step${msg.thoughts.length > 1 ? 's' : ''})
-                        </summary>
-                        <div class="p-3 text-xs space-y-2 border-t border-slate-200 dark:border-slate-700">
-                            ${msg.thoughts.map((t, i) => `
-                                <div class="pl-2 border-l-2 border-purple-400">
-                                    <div class="font-bold dark:text-slate-300">${i + 1}. ${escapeHtml(t.subject || 'Reasoning')}</div>
-                                    <div class="opacity-75 mt-0.5 whitespace-pre-wrap">${escapeHtml(t.description || '')}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                    bubble.appendChild(details);
-                }
-
-                // User session context collapsible
-                const rawContentText = extractMessageText(msg.content);
-                const sessionCtx = extractSessionContext(rawContentText);
-                const promptText = cleanSessionContext(rawContentText);
-
-                if (isUser && sessionCtx) {
-                    const ctxDetails = document.createElement('details');
-                    ctxDetails.className = "mb-3 rounded bg-blue-700/40 border border-blue-400/30 p-2 text-xs text-blue-100 no-print";
-                    ctxDetails.innerHTML = `
-                        <summary class="cursor-pointer font-medium flex items-center gap-1.5 hover:text-white">
-                            <i class="ph ph-brackets-curly"></i> Session Context &bull; ${escapeHtml(chat.projectName || 'Environment')}
-                        </summary>
-                        <pre class="mt-2 p-2 bg-blue-950/60 rounded text-[11px] max-h-56 overflow-y-auto whitespace-pre-wrap font-mono border border-blue-400/20">${escapeHtml(sessionCtx)}</pre>
-                    `;
-                    bubble.appendChild(ctxDetails);
-                }
-
-                // Main Message Content
-                const contentDiv = document.createElement('div');
-                contentDiv.className = `prose ${isUser ? 'prose-invert' : 'dark:prose-invert'} max-w-none text-sm break-words`;
-                
-                if (isUser) {
-                    if (promptText) {
-                        contentDiv.innerHTML = marked.parse(promptText);
-                    } else if (sessionCtx) {
-                        contentDiv.innerHTML = '<span class="italic text-xs text-blue-200 opacity-90"><i class="ph ph-sparkle mr-1"></i>Session initialized with environment context</span>';
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = "prose prose-invert max-w-none text-sm break-words";
+                    if (turn.cleanPrompt) {
+                        contentDiv.innerHTML = marked.parse(turn.cleanPrompt);
+                    } else if (turn.systemContext) {
+                        contentDiv.innerHTML = '<span class="italic text-xs text-blue-200 opacity-90 flex items-center gap-1.5"><i class="ph ph-sparkle"></i> Session initialized with environment context</span>';
                     } else {
-                        contentDiv.innerHTML = marked.parse(rawContentText || "");
+                        contentDiv.innerHTML = marked.parse(turn.rawText || "");
                     }
-                } else if (isError) {
-                    contentDiv.innerHTML = `<div class="flex items-start gap-2"><i class="ph ph-warning-circle text-lg shrink-0 mt-0.5"></i><div class="whitespace-pre-wrap font-mono text-xs">${escapeHtml(rawContentText)}</div></div>`;
-                } else {
-                    contentDiv.innerHTML = marked.parse(rawContentText || "");
-                }
-                bubble.appendChild(contentDiv);
+                    bubble.appendChild(contentDiv);
 
-                // Tool Calls Collapsible
-                if (msg.toolCalls && msg.toolCalls.length) {
-                    const tDetails = document.createElement('details');
-                    tDetails.className = "mt-3 border border-slate-300 dark:border-slate-700 rounded bg-slate-900 text-slate-200 no-print";
-                    
-                    const hasError = msg.toolCalls.some(c => c.result?.[0]?.functionResponse?.response?.error);
-                    if (hasError) tDetails.open = true;
+                    // User Bubble Footer
+                    const footer = document.createElement('div');
+                    footer.className = "flex items-center justify-between mt-2 pt-2 border-t border-white/20 no-print text-[11px]";
 
-                    tDetails.innerHTML = `
-                        <summary class="p-2 text-xs font-mono flex items-center justify-between cursor-pointer hover:bg-slate-800">
-                            <span class="flex items-center gap-2 ${hasError ? 'text-amber-400' : 'text-green-400'}">
-                                <i class="ph ph-terminal text-sm"></i> Tools & Terminal (${msg.toolCalls.length})
-                            </span>
-                        </summary>
-                        <div class="p-3 overflow-x-auto text-[11px] font-mono space-y-4 bg-black/40 max-h-96">
-                            ${msg.toolCalls.map(c => {
-                                const resp = c.result?.[0]?.functionResponse?.response || {};
-                                const output = resp.output || resp.error || (typeof c.result === 'string' ? c.result : "") || "(No output)";
-                                const outputStr = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+                    const copyBtn = document.createElement('button');
+                    copyBtn.innerHTML = '<i class="ph ph-copy"></i>';
+                    copyBtn.title = "Copy prompt";
+                    copyBtn.className = "opacity-60 hover:opacity-100 transition-opacity mr-auto cursor-pointer";
+                    copyBtn.onclick = () => {
+                        navigator.clipboard.writeText(turn.cleanPrompt || turn.rawText);
+                        copyBtn.innerHTML = '<i class="ph ph-check text-green-400"></i>';
+                        setTimeout(() => copyBtn.innerHTML = '<i class="ph ph-copy"></i>', 1500);
+                    };
+                    footer.appendChild(copyBtn);
 
-                                let cmdHeader = `$ ${c.name}`;
-                                if (c.args) {
-                                    if (c.args.command) cmdHeader = `$ ${c.args.command}`;
-                                    else if (c.args.file_path) cmdHeader = `${c.name}: ${c.args.file_path}`;
-                                    else if (c.args.pattern) cmdHeader = `${c.name}: "${c.args.pattern}"`;
-                                    else if (Object.keys(c.args).length > 0) cmdHeader = `${c.name}(${Object.keys(c.args).join(', ')})`;
-                                }
+                    const rightDiv = document.createElement('div');
+                    rightDiv.className = "flex items-center gap-3";
 
-                                return `
-                                    <div class="border-b border-slate-800 pb-3 last:border-0 last:pb-0">
-                                        <div class="text-green-300 font-bold mb-1">${escapeHtml(cmdHeader)}</div>
-                                        <div class="opacity-80 whitespace-pre-wrap pl-2 border-l border-slate-700 max-h-60 overflow-y-auto">${escapeHtml(outputStr)}</div>
+                    const ttsBtn = document.createElement('button');
+                    ttsBtn.innerHTML = '<i class="ph ph-play"></i>';
+                    ttsBtn.title = "Read aloud";
+                    ttsBtn.className = "opacity-60 hover:opacity-100 transition-all cursor-pointer";
+                    ttsBtn.onclick = () => toggleTTS(turn.cleanPrompt || turn.rawText, turn.id, ttsBtn);
+                    rightDiv.appendChild(ttsBtn);
+
+                    if (turn.userMsg.timestamp) {
+                        const time = document.createElement('span');
+                        time.className = "text-[10px] opacity-60";
+                        time.textContent = new Date(turn.userMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        rightDiv.appendChild(time);
+                    }
+
+                    footer.appendChild(rightDiv);
+                    bubble.appendChild(footer);
+                    userBoxWrap.appendChild(bubble);
+                    turnWrapper.appendChild(userBoxWrap);
+
+                    // --- 2. TOGGLES BELOW USER QUESTION BOX ---
+                    const hasContext = Boolean(turn.systemContext);
+                    const hasTools = turn.toolCalls && turn.toolCalls.length > 0;
+                    const hasThoughts = !hasTools && turn.thoughts && turn.thoughts.length > 0;
+
+                    if (hasContext || hasTools || hasThoughts) {
+                        const togglesBar = document.createElement('div');
+                        togglesBar.className = "flex flex-wrap items-center justify-end gap-2 mt-2 mb-3 px-1 no-print";
+
+                        if (hasContext) {
+                            const ctxBtn = document.createElement('button');
+                            ctxBtn.id = `btn-ctx-${turn.id}`;
+                            ctxBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-slate-700/80 transition-all border border-slate-300/60 dark:border-slate-700/80 cursor-pointer shadow-xs";
+                            ctxBtn.innerHTML = `
+                                <i class="ph ph-brackets-curly text-blue-500"></i>
+                                <span>System Context</span>
+                                <i class="ph ph-caret-down text-[10px] transition-transform duration-200" id="caret-ctx-${turn.id}"></i>
+                            `;
+                            ctxBtn.onclick = () => toggleTurnPanel(turn.id, 'ctx');
+                            togglesBar.appendChild(ctxBtn);
+                        }
+
+                        if (hasTools) {
+                            const toolsBtn = document.createElement('button');
+                            toolsBtn.id = `btn-tools-${turn.id}`;
+                            toolsBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-slate-700/80 transition-all border border-slate-300/60 dark:border-slate-700/80 cursor-pointer shadow-xs";
+                            toolsBtn.innerHTML = `
+                                <i class="ph ph-terminal text-emerald-500"></i>
+                                <span>Tool Responses (${turn.toolCalls.length})</span>
+                                <i class="ph ph-caret-down text-[10px] transition-transform duration-200" id="caret-tools-${turn.id}"></i>
+                            `;
+                            toolsBtn.onclick = () => toggleTurnPanel(turn.id, 'tools');
+                            togglesBar.appendChild(toolsBtn);
+                        }
+
+                        if (hasThoughts) {
+                            const thBtn = document.createElement('button');
+                            thBtn.id = `btn-thoughts-${turn.id}`;
+                            thBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-purple-100 hover:text-purple-700 dark:hover:bg-slate-700/80 transition-all border border-slate-300/60 dark:border-slate-700/80 cursor-pointer shadow-xs";
+                            thBtn.innerHTML = `
+                                <i class="ph ph-brain text-purple-500"></i>
+                                <span>Reasoning (${turn.thoughts.length})</span>
+                                <i class="ph ph-caret-down text-[10px] transition-transform duration-200" id="caret-thoughts-${turn.id}"></i>
+                            `;
+                            thBtn.onclick = () => toggleTurnPanel(turn.id, 'thoughts');
+                            togglesBar.appendChild(thBtn);
+                        }
+
+                        turnWrapper.appendChild(togglesBar);
+
+                        // --- 3. SYSTEM CONTEXT PANEL (HIDDEN FIRST) ---
+                        if (hasContext) {
+                            const ctxPanel = document.createElement('div');
+                            ctxPanel.id = `panel-ctx-${turn.id}`;
+                            ctxPanel.className = "hidden w-full mb-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/70 dark:bg-slate-900/90 p-4 text-xs shadow-inner transition-all no-print";
+                            ctxPanel.innerHTML = `
+                                <div class="flex items-center justify-between mb-2 pb-2 border-b border-blue-200/70 dark:border-blue-800/60">
+                                    <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300 font-semibold">
+                                        <i class="ph ph-brackets-curly text-sm"></i>
+                                        <span>System & Workspace Context</span>
+                                        <span class="text-[10px] font-normal px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">${escapeHtml(chat.projectName || 'Environment')}</span>
+                                    </div>
+                                    <button onclick="copyTurnContext(this, '${turn.id}')" class="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-medium">
+                                        <i class="ph ph-copy"></i> Copy
+                                    </button>
+                                </div>
+                                <pre id="ctx-text-${turn.id}" class="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-200 max-h-72 p-3 bg-white dark:bg-slate-950 rounded-lg border border-blue-200/60 dark:border-slate-800">${escapeHtml(turn.systemContext)}</pre>
+                            `;
+                            turnWrapper.appendChild(ctxPanel);
+                        }
+
+                        // --- 4. TOOL RESPONSES PANEL (HIDDEN FIRST) ---
+                        if (hasTools) {
+                            const toolPanel = document.createElement('div');
+                            toolPanel.id = `panel-tools-${turn.id}`;
+                            toolPanel.className = "hidden w-full mb-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-900 text-slate-200 p-4 text-xs shadow-xl transition-all no-print";
+                            
+                            let thoughtsHtml = '';
+                            if (turn.thoughts && turn.thoughts.length) {
+                                thoughtsHtml = `
+                                    <div class="mb-3 p-3 rounded-lg bg-slate-950/70 border border-slate-800 space-y-2">
+                                        <div class="font-bold text-purple-400 flex items-center gap-1.5 text-[11px]">
+                                            <i class="ph ph-brain"></i> Agent Reasoning (${turn.thoughts.length})
+                                        </div>
+                                        <div class="space-y-1.5 pl-2 border-l border-purple-500/40 text-[11px]">
+                                            ${turn.thoughts.map((th, idx) => `
+                                                <div>
+                                                    <div class="text-slate-300 font-semibold">${idx + 1}. ${escapeHtml(th.subject || 'Thought')}</div>
+                                                    <div class="text-slate-400 mt-0.5 whitespace-pre-wrap">${escapeHtml(th.description || '')}</div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
                                     </div>
                                 `;
-                            }).join('')}
+                            }
+
+                            toolPanel.innerHTML = `
+                                <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
+                                    <div class="flex items-center gap-2">
+                                        <i class="ph ph-terminal text-emerald-400 text-sm"></i>
+                                        <span class="font-bold text-emerald-300">Tool Calls & Execution Responses</span>
+                                        <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">${turn.toolCalls.length} executed</span>
+                                    </div>
+                                    <button onclick="copyToolActivity(this, '${turn.id}')" class="text-slate-400 hover:text-white flex items-center gap-1 text-[11px] cursor-pointer font-medium">
+                                        <i class="ph ph-copy"></i> Copy Output
+                                    </button>
+                                </div>
+                                ${thoughtsHtml}
+                                <div id="tool-output-list-${turn.id}" class="space-y-3 max-h-96 overflow-y-auto pr-1">
+                                    ${renderToolCallsList(turn.toolCalls)}
+                                </div>
+                            `;
+                            turnWrapper.appendChild(toolPanel);
+                        }
+
+                        // --- 5. REASONING PANEL (if only thoughts, no tools) ---
+                        if (hasThoughts) {
+                            const thPanel = document.createElement('div');
+                            thPanel.id = `panel-thoughts-${turn.id}`;
+                            thPanel.className = "hidden w-full mb-4 rounded-xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/60 dark:bg-slate-900/90 p-4 text-xs shadow-inner transition-all no-print";
+                            thPanel.innerHTML = `
+                                <div class="flex items-center justify-between mb-2 pb-2 border-b border-purple-200 dark:border-purple-800/60">
+                                    <span class="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5 text-xs">
+                                        <i class="ph ph-brain"></i> Agent Reasoning Steps (${turn.thoughts.length})
+                                    </span>
+                                </div>
+                                <div class="space-y-2 p-2 bg-white/70 dark:bg-slate-950/70 rounded-lg border border-purple-100 dark:border-slate-800">
+                                    ${turn.thoughts.map((th, idx) => `
+                                        <div class="pl-2 border-l-2 border-purple-400">
+                                            <div class="font-bold dark:text-slate-200">${idx + 1}. ${escapeHtml(th.subject || 'Reasoning')}</div>
+                                            <div class="opacity-80 mt-0.5 whitespace-pre-wrap">${escapeHtml(th.description || '')}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `;
+                            turnWrapper.appendChild(thPanel);
+                        }
+                    }
+                }
+
+                // --- 6. INFO MESSAGES (Topic updates, etc.) ---
+                if (turn.infoMsgs && turn.infoMsgs.length) {
+                    turn.infoMsgs.forEach(im => {
+                        const infoText = extractMessageText(im.content);
+                        if (infoText) {
+                            const infoWrap = document.createElement('div');
+                            infoWrap.className = "flex justify-center my-3 no-print";
+                            infoWrap.innerHTML = `<span class="px-3 py-1 rounded-full text-xs bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><i class="ph ph-info"></i> ${escapeHtml(infoText)}</span>`;
+                            turnWrapper.appendChild(infoWrap);
+                        }
+                    });
+                }
+
+                // --- 7. ASSISTANT ANSWERS / TEXT MESSAGES ---
+                if (turn.assistantMsgs && turn.assistantMsgs.length) {
+                    turn.assistantMsgs.forEach(m => {
+                        const ansWrap = document.createElement('div');
+                        ansWrap.className = "flex w-full justify-start mb-4";
+
+                        const bubble = document.createElement('div');
+                        bubble.className = "chat-content max-w-[95%] md:max-w-[85%] rounded-2xl px-5 py-4 shadow-sm leading-relaxed overflow-hidden relative group transition-all bg-white dark:bg-darkpanel text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none";
+
+                        const contentDiv = document.createElement('div');
+                        contentDiv.className = "prose dark:prose-invert max-w-none text-sm break-words";
+                        const answerText = extractMessageText(m.content);
+                        contentDiv.innerHTML = marked.parse(answerText || "");
+                        bubble.appendChild(contentDiv);
+
+                        // Assistant Footer
+                        const footer = document.createElement('div');
+                        footer.className = "flex items-center justify-between mt-3 pt-2 border-t border-slate-200 dark:border-slate-700/60 no-print text-[11px]";
+
+                        const copyBtn = document.createElement('button');
+                        copyBtn.innerHTML = '<i class="ph ph-copy"></i>';
+                        copyBtn.title = "Copy answer";
+                        copyBtn.className = "opacity-60 hover:opacity-100 transition-opacity mr-auto cursor-pointer";
+                        copyBtn.onclick = () => {
+                            navigator.clipboard.writeText(answerText);
+                            copyBtn.innerHTML = '<i class="ph ph-check text-green-400"></i>';
+                            setTimeout(() => copyBtn.innerHTML = '<i class="ph ph-copy"></i>', 1500);
+                        };
+                        footer.appendChild(copyBtn);
+
+                        const rightDiv = document.createElement('div');
+                        rightDiv.className = "flex items-center gap-3";
+
+                        if (m.tokens?.total) {
+                            const tokenBadge = document.createElement('span');
+                            tokenBadge.className = "text-[10px] opacity-60 font-mono";
+                            tokenBadge.title = `Input: ${m.tokens.input || 0}, Output: ${m.tokens.output || 0}`;
+                            tokenBadge.textContent = `${m.tokens.total.toLocaleString()} tokens`;
+                            rightDiv.appendChild(tokenBadge);
+                        }
+
+                        const ttsBtn = document.createElement('button');
+                        ttsBtn.innerHTML = '<i class="ph ph-play"></i>';
+                        ttsBtn.title = "Read aloud";
+                        ttsBtn.className = "opacity-60 hover:opacity-100 transition-all cursor-pointer";
+                        ttsBtn.onclick = () => toggleTTS(answerText, m.id, ttsBtn);
+                        rightDiv.appendChild(ttsBtn);
+
+                        if (m.timestamp) {
+                            const time = document.createElement('span');
+                            time.className = "text-[10px] opacity-60";
+                            time.textContent = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            rightDiv.appendChild(time);
+                        }
+
+                        footer.appendChild(rightDiv);
+                        bubble.appendChild(footer);
+                        ansWrap.appendChild(bubble);
+                        turnWrapper.appendChild(ansWrap);
+                    });
+                } else if (turn.toolCalls.length > 0 && !turn.cancelled) {
+                    // Tool calls completed without conversational text
+                    const doneWrap = document.createElement('div');
+                    doneWrap.className = "flex justify-start my-2 pl-2 no-print";
+                    doneWrap.innerHTML = `<span class="italic text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5"><i class="ph ph-check-circle text-emerald-500"></i> Completed tool execution (${turn.toolCalls.length} call${turn.toolCalls.length > 1 ? 's' : ''})</span>`;
+                    turnWrapper.appendChild(doneWrap);
+                }
+
+                // --- 8. CANCELLATION BADGE ---
+                if (turn.cancelled) {
+                    const cancelWrap = document.createElement('div');
+                    cancelWrap.className = "flex justify-start my-2";
+                    cancelWrap.innerHTML = `
+                        <div class="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold border border-orange-200 dark:border-orange-800/60 shadow-xs">
+                            <i class="ph ph-warning"></i> Generation Cancelled
                         </div>
                     `;
-                    bubble.appendChild(tDetails);
+                    turnWrapper.appendChild(cancelWrap);
                 }
 
-                // Bubble Footer
-                const footer = document.createElement('div');
-                footer.className = `flex items-center justify-between mt-2 pt-2 border-t ${isUser ? 'border-white/20' : 'border-slate-200 dark:border-slate-700/60'} no-print text-[11px]`;
-
-                const copyBtn = document.createElement('button');
-                copyBtn.innerHTML = '<i class="ph ph-copy"></i>';
-                copyBtn.title = "Copy message";
-                copyBtn.className = "opacity-60 hover:opacity-100 transition-opacity mr-auto";
-                copyBtn.onclick = () => {
-                    const textToCopy = isUser ? (promptText || rawContentText) : rawContentText;
-                    navigator.clipboard.writeText(textToCopy);
-                    copyBtn.innerHTML = '<i class="ph ph-check text-green-400"></i>';
-                    setTimeout(() => copyBtn.innerHTML = '<i class="ph ph-copy"></i>', 1500);
-                };
-                footer.appendChild(copyBtn);
-
-                const rightDiv = document.createElement('div');
-                rightDiv.className = "flex items-center gap-3";
-
-                if (msg.tokens?.total) {
-                    const tokenBadge = document.createElement('span');
-                    tokenBadge.className = "text-[10px] opacity-60 font-mono";
-                    tokenBadge.title = `Input: ${msg.tokens.input || 0}, Output: ${msg.tokens.output || 0}`;
-                    tokenBadge.textContent = `${msg.tokens.total.toLocaleString()} tokens`;
-                    rightDiv.appendChild(tokenBadge);
+                // --- 9. ERROR MESSAGES ---
+                if (turn.errorMsgs && turn.errorMsgs.length) {
+                    turn.errorMsgs.forEach(em => {
+                        const errWrap = document.createElement('div');
+                        errWrap.className = "flex justify-start my-3";
+                        const errText = extractMessageText(em.content);
+                        errWrap.innerHTML = `
+                            <div class="bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-xl p-4 text-xs shadow-sm max-w-[85%]">
+                                <div class="flex items-start gap-2">
+                                    <i class="ph ph-warning-circle text-base shrink-0 mt-0.5"></i>
+                                    <div class="whitespace-pre-wrap font-mono">${escapeHtml(errText)}</div>
+                                </div>
+                            </div>
+                        `;
+                        turnWrapper.appendChild(errWrap);
+                    });
                 }
 
-                const ttsBtn = document.createElement('button');
-                ttsBtn.innerHTML = '<i class="ph ph-play"></i>';
-                ttsBtn.title = "Read aloud";
-                ttsBtn.className = "opacity-60 hover:opacity-100 transition-all";
-                ttsBtn.onclick = () => toggleTTS(isUser ? (promptText || rawContentText) : rawContentText, msg.id, ttsBtn);
-                rightDiv.appendChild(ttsBtn);
-
-                if (msg.timestamp) {
-                    const time = document.createElement('span');
-                    time.className = "text-[10px] opacity-60";
-                    time.textContent = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    rightDiv.appendChild(time);
-                }
-
-                footer.appendChild(rightDiv);
-                bubble.appendChild(footer);
-                wrapper.appendChild(bubble);
-                container.appendChild(wrapper);
+                container.appendChild(turnWrapper);
             });
         }
 
@@ -1192,24 +1484,35 @@
                 md += `- **Project:** ${chat.projectName}\n`;
                 md += `- **Session ID:** \`${chat.id}\`\n\n---\n\n`;
 
-                chat.messages.forEach(m => {
-                    if (isPureToolResponse(m)) return;
-                    const text = cleanSessionContext(extractMessageText(m.content));
-                    if (!text && m.type === 'info') return;
-                    
-                    md += `### ${m.type.toUpperCase()}\n\n${text || "(Empty)"}\n\n`;
-                    if (m.toolCalls && m.toolCalls.length) {
-                        md += `#### Tools (${m.toolCalls.length})\n\n`;
-                        m.toolCalls.forEach(tc => {
-                            const resp = tc.result?.[0]?.functionResponse?.response?.output || "";
+                const turns = buildConversationTurns(chat.messages);
+                turns.forEach((t, i) => {
+                    if (t.userMsg) {
+                        md += `### USER\n\n${t.cleanPrompt || t.rawText || "(Session initialized with environment context)"}\n\n`;
+                    }
+                    if (t.systemContext) {
+                        md += `<details><summary>System Context</summary>\n\n\`\`\`\n${t.systemContext}\n\`\`\`\n</details>\n\n`;
+                    }
+                    if (t.toolCalls && t.toolCalls.length) {
+                        md += `<details><summary>Tool Responses (${t.toolCalls.length})</summary>\n\n`;
+                        t.toolCalls.forEach(tc => {
+                            const resp = tc.result?.[0]?.functionResponse?.response?.output || tc.result?.[0]?.functionResponse?.response?.error || "";
                             md += `\`\`\`bash\n# ${tc.name}\n${typeof resp === 'string' ? resp : JSON.stringify(resp, null, 2)}\n\`\`\`\n\n`;
                         });
+                        md += `</details>\n\n`;
+                    }
+                    if (t.assistantMsgs && t.assistantMsgs.length) {
+                        t.assistantMsgs.forEach(am => {
+                            md += `### ASSISTANT\n\n${extractMessageText(am.content)}\n\n`;
+                        });
+                    }
+                    if (t.cancelled) {
+                        md += `> *[Generation Cancelled]*\n\n`;
                     }
                     md += `---\n\n`;
                 });
                 downloadFile(`gemini-chat-${chat.id.slice(0, 8)}.md`, md, 'text/markdown');
             } else if (type === 'html') {
-                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:850px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#334155}pre{background:#0f172a;color:#f8fafc;padding:1rem;border-radius:6px;overflow-x:auto}code{font-family:monospace}.msg{margin-bottom:1.5rem;padding:1rem;border-radius:8px;border:1px solid #e2e8f0}.user{background:#eff6ff;border-color:#bfdbfe}.model{background:#f8fafc}</style></head><body><h1>${escapeHtml(title)}</h1><p><small>${chat.date.toLocaleString()} | Project: ${escapeHtml(chat.projectName)}</small></p><hr/>${document.getElementById('messages-container').innerHTML}</body></html>`;
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:850px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#334155}pre{background:#0f172a;color:#f8fafc;padding:1rem;border-radius:6px;overflow-x:auto}code{font-family:monospace}.conversation-turn{margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid #e2e8f0}.chat-content{padding:1rem;border-radius:12px;margin-bottom:0.75rem}.bg-blue-600{background:#2563eb;color:#fff}.bg-white{background:#f8fafc;border:1px solid #e2e8f0}</style></head><body><h1>${escapeHtml(title)}</h1><p><small>${chat.date.toLocaleString()} | Project: ${escapeHtml(chat.projectName)}</small></p><hr/>${document.getElementById('messages-container').innerHTML}</body></html>`;
                 downloadFile(`gemini-chat-${chat.id.slice(0, 8)}.html`, html, 'text/html');
             }
         }
