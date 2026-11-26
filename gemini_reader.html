@@ -559,6 +559,39 @@
             return fallbackName;
         }
 
+        function detectActualFolderPath(dirHandle, rawFiles = []) {
+            if (!dirHandle && (!rawFiles || rawFiles.length === 0)) return "";
+
+            // Check if any File object has a native path (e.g. Electron, desktop runtimes)
+            if (rawFiles && rawFiles.length > 0) {
+                for (const rf of rawFiles) {
+                    if (rf && rf.file && rf.file.path) {
+                        const full = rf.file.path.replace(/\\/g, '/');
+                        const rel = (rf.path || '').replace(/\\/g, '/');
+                        if (rel && full.endsWith(rel)) {
+                            return rf.file.path.slice(0, rf.file.path.length - rf.path.length).replace(/[/\\]$/, '');
+                        }
+                        const idx = full.lastIndexOf('/chats/');
+                        if (idx !== -1) {
+                            return rf.file.path.slice(0, idx);
+                        }
+                        const dirIdx = full.lastIndexOf('/');
+                        if (dirIdx !== -1) {
+                            return rf.file.path.slice(0, dirIdx);
+                        }
+                    }
+                }
+            }
+
+            if (dirHandle) {
+                if (dirHandle.path) return dirHandle.path;
+                if (dirHandle.fullPath) return dirHandle.fullPath;
+                if (dirHandle.name) return dirHandle.name;
+            }
+
+            return "";
+        }
+
         function loadRecentFolders() {
             try {
                 const saved = localStorage.getItem('gemini_recent_folders');
@@ -569,18 +602,21 @@
             }
         }
 
-        async function recordRecentFolder(id, path, name, chatCount = 0, dirHandle = null) {
-            if (!path && !name) return;
+        async function recordRecentFolder(id, actualPath, originalPath = '', chatCount = 0, dirHandle = null) {
+            if (!actualPath && !originalPath) return;
             loadRecentFolders();
-            const folderId = id || ('folder_' + (path || name));
+            const folderId = id || ('folder_' + (actualPath || 'default') + (originalPath ? '_' + originalPath.replace(/[^a-zA-Z0-9_-]/g, '_') : ''));
             if (dirHandle) {
                 await saveHandleToDb(folderId, dirHandle);
             }
-            recentFolders = recentFolders.filter(f => f.id !== folderId && f.path !== path);
+            recentFolders = recentFolders.filter(f => f.id !== folderId && !(f.actualPath === actualPath && f.originalPath === originalPath));
             recentFolders.unshift({
                 id: folderId,
-                path: path || name,
-                name: name || path,
+                actualPath: actualPath || originalPath,
+                originalPath: originalPath || '',
+                // Backward compatibility properties
+                path: actualPath || originalPath,
+                name: actualPath || originalPath,
                 chatCount: chatCount || 0,
                 lastOpened: Date.now()
             });
@@ -611,14 +647,25 @@
 
             if (clearBtn) clearBtn.classList.remove('hidden');
 
-            listEl.innerHTML = recentFolders.map(item => `
-                <div class="group flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 hover:bg-blue-50/70 dark:hover:bg-blue-950/40 hover:border-blue-300 dark:hover:border-blue-800 transition-all cursor-pointer" onclick="openRecentFolder('${item.id}')">
+            listEl.innerHTML = recentFolders.map(item => {
+                const actualPath = item.actualPath || item.name || item.path || 'Folder';
+                const originalPath = item.originalPath !== undefined ? item.originalPath : (item.actualPath ? '' : (item.path !== item.name ? item.path : ''));
+                const hasDiffOrig = Boolean(originalPath && originalPath !== actualPath);
+
+                return `
+                <div class="group flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 hover:bg-blue-50/70 dark:hover:bg-blue-950/40 hover:border-blue-300 dark:hover:border-blue-800 transition-all cursor-pointer" onclick="openRecentFolder('${escapeHtml(item.id)}')">
                     <div class="flex items-center gap-3 min-w-0 pr-2">
                         <div class="p-2 rounded-lg bg-blue-100/70 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 shrink-0 group-hover:scale-105 transition-transform">
                             <i class="ph ph-folder text-lg"></i>
                         </div>
                         <div class="min-w-0">
-                            <div class="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">${escapeHtml(item.path)}</div>
+                            <div class="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title="${escapeHtml(actualPath)}">${escapeHtml(actualPath)}</div>
+                            ${hasDiffOrig ? `
+                                <div class="font-mono text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5 flex items-center gap-1" title="Original path: ${escapeHtml(originalPath)}">
+                                    <span class="opacity-60 text-[9px] uppercase tracking-wider font-sans shrink-0">orig:</span>
+                                    <span class="truncate">${escapeHtml(originalPath)}</span>
+                                </div>
+                            ` : ''}
                             <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
                                 <span>${formatRelativeTime(item.lastOpened)}</span>
                                 ${item.chatCount ? `<span class="opacity-75">• ${item.chatCount} chats</span>` : ''}
@@ -626,7 +673,7 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-1 shrink-0">
-                        <button onclick="event.stopPropagation(); removeRecentFolder('${item.id}')" title="Remove from history" class="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                        <button onclick="event.stopPropagation(); removeRecentFolder('${escapeHtml(item.id)}')" title="Remove from history" class="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                             <i class="ph ph-trash text-sm"></i>
                         </button>
                         <span class="p-1.5 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -634,7 +681,8 @@
                         </span>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         async function openRecentFolder(id) {
@@ -645,10 +693,12 @@
                 return;
             }
 
+            const displayName = item.actualPath || item.name || item.path || "Folder";
+
             try {
                 const dirHandle = await getHandleFromDb(item.id);
                 if (!dirHandle) {
-                    showToast(`Could not open "${item.path}". Directory access handle is unavailable. Click "Open .gemini folder" to select it again.`, "error", 5000);
+                    showToast(`Could not open "${displayName}". Directory access handle is unavailable. Click "Open .gemini folder" to select it again.`, "error", 5000);
                     return;
                 }
 
@@ -658,7 +708,7 @@
                     perm = await dirHandle.requestPermission({ mode: 'read' });
                 }
                 if (perm !== 'granted') {
-                    showToast(`Permission denied to open "${item.path}".`, "error", 4000);
+                    showToast(`Permission denied to open "${displayName}".`, "error", 4000);
                     return;
                 }
 
@@ -681,10 +731,10 @@
                 if (state.pollTimer) clearInterval(state.pollTimer);
                 state.pollTimer = setInterval(() => scanDirectory(dirHandle, true), 10000);
 
-                showToast(`Opened "${item.path}" (${allChats.length} chats)`, "success");
+                showToast(`Opened "${displayName}" (${allChats.length} chats)`, "success");
             } catch (err) {
                 console.error("Failed to open recent folder:", err);
-                showToast(`Could not open "${item.path}". The folder may have been moved, renamed, or deleted.`, "error", 5000);
+                showToast(`Could not open "${displayName}". The folder may have been moved, renamed, or deleted.`, "error", 5000);
             }
         }
 
@@ -997,22 +1047,27 @@
 
                 // If root directory handle is set and not polling, record in recent history
                 if (!isPolling && tempChats.length > 0 && state.dirHandle) {
-                    let detectedPath = state.dirHandle.name;
+                    let detectedOrigPath = "";
                     for (const c of tempChats) {
                         if (c.messages) {
                             for (const m of c.messages) {
                                 const raw = extractMessageText(m.content);
-                                const p = detectGeminiRootPath(raw, state.dirHandle.name);
-                                if (p && p !== state.dirHandle.name) {
-                                    detectedPath = p;
+                                const p = detectGeminiRootPath(raw, "");
+                                if (p) {
+                                    detectedOrigPath = p;
                                     break;
                                 }
                             }
                         }
-                        if (detectedPath !== state.dirHandle.name) break;
+                        if (detectedOrigPath) break;
                     }
-                    const folderId = 'folder_' + (state.dirHandle.name || 'default');
-                    recordRecentFolder(folderId, detectedPath, state.dirHandle.name, tempChats.length, state.dirHandle);
+
+                    const actualPath = detectActualFolderPath(state.dirHandle, rawFiles) || state.dirHandle.name || 'folder';
+                    const originalPath = detectedOrigPath || '';
+                    const idSuffix = originalPath ? '_' + originalPath.replace(/[^a-zA-Z0-9_-]/g, '_') : '';
+                    const folderId = 'folder_' + (state.dirHandle.name || 'default') + idSuffix;
+
+                    recordRecentFolder(folderId, actualPath, originalPath, tempChats.length, state.dirHandle);
                 }
 
                 // If active chat received updates in background, refresh it
