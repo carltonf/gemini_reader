@@ -250,28 +250,22 @@
                     Supports Windows, MacOS & Linux &bull; 100% Local in Browser &bull; Drag & drop supported
                 </div>
 
-                <!-- OS Hints -->
-                <div class="text-left bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm w-full">
-                     <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center">
-                        <i class="ph ph-info mr-2"></i> Default Chat Folder Location
-                     </h3>
-                     <div class="grid md:grid-cols-3 gap-4 text-sm">
-                        <div class="space-y-1">
-                            <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-windows-logo text-blue-500"></i> Windows</div>
-                            <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">C:\Users\NAME\.gemini</code>
-                        </div>
-                        <div class="space-y-1">
-                            <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-apple-logo"></i> MacOS</div>
-                            <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">/Users/name/.gemini</code>
-                        </div>
-                        <div class="space-y-1">
-                            <div class="font-medium dark:text-slate-200 flex items-center gap-1"><i class="ph ph-linux-logo text-orange-500"></i> Linux</div>
-                            <code class="block bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded text-xs break-all border border-slate-300 dark:border-slate-700">/home/name/.gemini</code>
-                        </div>
+                <!-- Recently Opened Folders -->
+                <div class="text-left bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm w-full">
+                     <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="ph ph-clock-counter-clockwise text-blue-500 text-sm"></i> Recently Opened Folders
+                        </h3>
+                        <button id="clear-recent-btn" onclick="clearRecentFolders()" class="hidden text-[11px] text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer">
+                            Clear History
+                        </button>
                      </div>
-                     <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-                        <i class="ph ph-lightbulb text-amber-500 mr-1"></i>
-                        <strong>Tip:</strong> Dotfolders like <code>.gemini</code> are hidden by default in file pickers. Press <kbd class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono">Ctrl+H</kbd> (Linux) or <kbd class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono">Cmd+Shift+.</kbd> (Mac) to show hidden items, or simply drag and drop the folder directly onto this page!
+                     <div id="recent-folders-list" class="space-y-2">
+                        <!-- Populated dynamically by renderRecentFolders() -->
+                     </div>
+                     <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <i class="ph ph-lightbulb text-amber-500 text-sm shrink-0"></i>
+                        <span>Folders opened with <b>Open .gemini folder</b> are remembered here. Click any path to reopen.</span>
                      </div>
                 </div>
                 <p class="text-xs text-red-500 hidden" id="error-msg"></p>
@@ -424,6 +418,7 @@
         let currentChatId = null, currentZoom = 1.0, isSpeaking = false;
         let activeFilter = 'all', currentProjectFilter = null, searchTimeout = null;
         let currentUtterance = null;
+        let recentFolders = [];
         const state = { dirHandle: null, pollTimer: null };
 
         // --- IMMEDIATE THEME INIT ---
@@ -437,6 +432,281 @@
             } catch (e) {}
         }
         initTheme();
+
+        // --- TOAST / BUBBLE NOTIFICATIONS ---
+        function showToast(message, type = 'info', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            const typeIcons = {
+                error: '<i class="ph ph-warning-circle text-red-500 text-lg shrink-0"></i>',
+                warning: '<i class="ph ph-warning text-amber-500 text-lg shrink-0"></i>',
+                success: '<i class="ph ph-check-circle text-emerald-400 text-lg shrink-0"></i>',
+                info: '<i class="ph ph-info text-blue-400 text-lg shrink-0"></i>'
+            };
+            const borderColors = {
+                error: 'border-red-500/60 dark:border-red-500/50',
+                warning: 'border-amber-500/60 dark:border-amber-500/50',
+                success: 'border-emerald-500/60 dark:border-emerald-500/50',
+                info: 'border-blue-500/60 dark:border-blue-500/50'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-900/95 text-slate-100 border ${borderColors[type] || borderColors.info} shadow-2xl backdrop-blur text-xs font-medium max-w-sm transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.innerHTML = `
+                ${typeIcons[type] || typeIcons.info}
+                <span class="flex-1 leading-snug">${escapeHtml(message)}</span>
+                <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white p-0.5 cursor-pointer shrink-0"><i class="ph ph-x"></i></button>
+            `;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.classList.add('opacity-0', 'translate-y-2');
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+        }
+
+        // --- INDEXEDDB FOR FOLDER HANDLES ---
+        const DB_NAME = 'gemini_reader_db';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'recent_handles';
+
+        function openDb() {
+            return new Promise((resolve) => {
+                if (!window.indexedDB) { resolve(null); return; }
+                try {
+                    const req = indexedDB.open(DB_NAME, DB_VERSION);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME);
+                        }
+                    };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        }
+
+        async function saveHandleToDb(key, handle) {
+            try {
+                const db = await openDb();
+                if (!db) return false;
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).put(handle, key);
+                return new Promise(res => {
+                    tx.oncomplete = () => res(true);
+                    tx.onerror = () => res(false);
+                });
+            } catch (e) {
+                return false;
+            }
+        }
+
+        async function getHandleFromDb(key) {
+            try {
+                const db = await openDb();
+                if (!db) return null;
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).get(key);
+                return new Promise(res => {
+                    req.onsuccess = () => res(req.result || null);
+                    req.onerror = () => res(null);
+                });
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function removeHandleFromDb(key) {
+            try {
+                const db = await openDb();
+                if (!db) return;
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).delete(key);
+            } catch (e) {}
+        }
+
+        // --- RECENT FOLDERS MANAGER ---
+        function formatRelativeTime(timestamp) {
+            if (!timestamp) return "";
+            const diffMs = Date.now() - timestamp;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffMins < 1) return "Just now";
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return new Date(timestamp).toLocaleDateString([], { month: "short", day: "numeric" });
+        }
+
+        function detectGeminiRootPath(text, fallbackName = ".gemini") {
+            if (!text) return fallbackName;
+            const m = text.match(/The project.*?temporary directory is:[^\r\n]*?([a-zA-Z]:[\\\/][^\r\n]*?[\\\/]\.gemini|\/[^\r\n]*?\/[.]gemini)/i);
+            if (m) return m[1];
+            const m2 = text.match(/temporary directory is:[^\r\n]*?([^\r\n]+)[\\\/]tmp[\\\/]/i);
+            if (m2) return m2[1];
+            return fallbackName;
+        }
+
+        function loadRecentFolders() {
+            try {
+                const saved = localStorage.getItem('gemini_recent_folders');
+                if (saved) recentFolders = JSON.parse(saved);
+                else recentFolders = [];
+            } catch (e) {
+                recentFolders = [];
+            }
+        }
+
+        async function recordRecentFolder(id, path, name, chatCount = 0, dirHandle = null) {
+            if (!path && !name) return;
+            loadRecentFolders();
+            const folderId = id || ('folder_' + (path || name));
+            if (dirHandle) {
+                await saveHandleToDb(folderId, dirHandle);
+            }
+            recentFolders = recentFolders.filter(f => f.id !== folderId && f.path !== path);
+            recentFolders.unshift({
+                id: folderId,
+                path: path || name,
+                name: name || path,
+                chatCount: chatCount || 0,
+                lastOpened: Date.now()
+            });
+            if (recentFolders.length > 8) recentFolders.length = 8;
+            localStorage.setItem('gemini_recent_folders', JSON.stringify(recentFolders));
+            renderRecentFolders();
+        }
+
+        function renderRecentFolders() {
+            const listEl = document.getElementById('recent-folders-list');
+            const clearBtn = document.getElementById('clear-recent-btn');
+            if (!listEl) return;
+
+            loadRecentFolders();
+
+            if (recentFolders.length === 0) {
+                if (clearBtn) clearBtn.classList.add('hidden');
+                listEl.innerHTML = `
+                    <div class="text-center py-6 px-4 rounded-lg border border-dashed border-slate-200 dark:border-slate-800 text-slate-400">
+                        <i class="ph ph-folder-open text-3xl mb-2 opacity-50 block"></i>
+                        <p class="text-xs font-medium text-slate-600 dark:text-slate-400">No recent folders yet</p>
+                        <p class="text-[11px] text-slate-400 mt-1">Folders opened with "Open .gemini folder" will be remembered here.</p>
+                        <div class="mt-2 text-[10px] font-mono text-slate-400">Common locations: ~/.gemini or C:\\Users\\NAME\\.gemini</div>
+                    </div>
+                `;
+                return;
+            }
+
+            if (clearBtn) clearBtn.classList.remove('hidden');
+
+            listEl.innerHTML = recentFolders.map(item => `
+                <div class="group flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 hover:bg-blue-50/70 dark:hover:bg-blue-950/40 hover:border-blue-300 dark:hover:border-blue-800 transition-all cursor-pointer" onclick="openRecentFolder('${item.id}')">
+                    <div class="flex items-center gap-3 min-w-0 pr-2">
+                        <div class="p-2 rounded-lg bg-blue-100/70 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 shrink-0 group-hover:scale-105 transition-transform">
+                            <i class="ph ph-folder text-lg"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">${escapeHtml(item.path)}</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                                <span>${formatRelativeTime(item.lastOpened)}</span>
+                                ${item.chatCount ? `<span class="opacity-75">• ${item.chatCount} chats</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="event.stopPropagation(); removeRecentFolder('${item.id}')" title="Remove from history" class="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                            <i class="ph ph-trash text-sm"></i>
+                        </button>
+                        <span class="p-1.5 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="ph ph-arrow-right text-sm"></i>
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function openRecentFolder(id) {
+            loadRecentFolders();
+            const item = recentFolders.find(f => f.id === id);
+            if (!item) {
+                showToast("Folder not found in history.", "error");
+                return;
+            }
+
+            try {
+                const dirHandle = await getHandleFromDb(item.id);
+                if (!dirHandle) {
+                    showToast(`Could not open "${item.path}". Directory access handle is unavailable. Click "Open .gemini folder" to select it again.`, "error", 5000);
+                    return;
+                }
+
+                // Verify / request permission
+                let perm = await dirHandle.queryPermission({ mode: 'read' });
+                if (perm !== 'granted') {
+                    perm = await dirHandle.requestPermission({ mode: 'read' });
+                }
+                if (perm !== 'granted') {
+                    showToast(`Permission denied to open "${item.path}".`, "error", 4000);
+                    return;
+                }
+
+                // Verify folder exists by attempting to read first entry
+                const testIter = dirHandle.values();
+                await testIter.next();
+
+                state.dirHandle = dirHandle;
+                showMainLayout();
+                await scanDirectory(dirHandle);
+
+                // Update timestamp and re-sort
+                item.lastOpened = Date.now();
+                item.chatCount = allChats.length;
+                recentFolders = recentFolders.filter(f => f.id !== item.id);
+                recentFolders.unshift(item);
+                localStorage.setItem('gemini_recent_folders', JSON.stringify(recentFolders));
+                renderRecentFolders();
+
+                if (state.pollTimer) clearInterval(state.pollTimer);
+                state.pollTimer = setInterval(() => scanDirectory(dirHandle, true), 10000);
+
+                showToast(`Opened "${item.path}" (${allChats.length} chats)`, "success");
+            } catch (err) {
+                console.error("Failed to open recent folder:", err);
+                showToast(`Could not open "${item.path}". The folder may have been moved, renamed, or deleted.`, "error", 5000);
+            }
+        }
+
+        async function removeRecentFolder(id) {
+            loadRecentFolders();
+            recentFolders = recentFolders.filter(f => f.id !== id);
+            localStorage.setItem('gemini_recent_folders', JSON.stringify(recentFolders));
+            await removeHandleFromDb(id);
+            renderRecentFolders();
+            showToast("Removed from recent history.", "info", 2000);
+        }
+
+        async function clearRecentFolders() {
+            loadRecentFolders();
+            for (const item of recentFolders) {
+                await removeHandleFromDb(item.id);
+            }
+            recentFolders = [];
+            localStorage.removeItem('gemini_recent_folders');
+            renderRecentFolders();
+            showToast("Recent folders history cleared.", "info", 2000);
+        }
 
         // --- MARKDOWN & CODE FORMATTING HELPERS ---
         function prepareMarkdown(text) {
@@ -489,6 +759,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
             loadFavorites();
+            loadRecentFolders();
+            renderRecentFolders();
 
             // Setup marked renderer
             const renderer = new marked.Renderer();
@@ -722,6 +994,26 @@
                 allChats = tempChats;
                 filterChats(document.getElementById('search-input').value);
                 statusEl.textContent = `Ready (${allChats.length} chats)`;
+
+                // If root directory handle is set and not polling, record in recent history
+                if (!isPolling && tempChats.length > 0 && state.dirHandle) {
+                    let detectedPath = state.dirHandle.name;
+                    for (const c of tempChats) {
+                        if (c.messages) {
+                            for (const m of c.messages) {
+                                const raw = extractMessageText(m.content);
+                                const p = detectGeminiRootPath(raw, state.dirHandle.name);
+                                if (p && p !== state.dirHandle.name) {
+                                    detectedPath = p;
+                                    break;
+                                }
+                            }
+                        }
+                        if (detectedPath !== state.dirHandle.name) break;
+                    }
+                    const folderId = 'folder_' + (state.dirHandle.name || 'default');
+                    recordRecentFolder(folderId, detectedPath, state.dirHandle.name, tempChats.length, state.dirHandle);
+                }
 
                 // If active chat received updates in background, refresh it
                 if (currentChatId) {
@@ -2186,5 +2478,7 @@
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
     </script>
+    <!-- Floating Toast Notification Bubble Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 </body>
 </html>
